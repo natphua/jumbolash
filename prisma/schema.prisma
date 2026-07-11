@@ -1,0 +1,49 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Room {
+  roomCode    String     @id @unique
+  gameState   String     @default("LOBBY") // LOBBY, PROMPTING, VOTING, RESULTS
+  roundNumber Int        @default(1)
+  players     Player[]
+  responses   Response[]
+}
+
+model Player {
+  id        String     @id @default(uuid())
+  nickname  String
+  roomCode  String
+  points    Int        @default(0)
+  room      Room       @relation(fields: [roomCode], references: [roomCode], onDelete: Cascade)
+  responses Response[]
+}
+
+model Prompt {
+  id        String     @id @default(uuid())
+  text      String     // The actual question (e.g., "Best place to cry in Halligan")
+  used      Boolean    @default(false)
+  responses Response[]
+}
+
+model Response {
+  id         String @id @default(uuid())
+  answerText String
+  votes      Int    @default(0)
+  
+  // Relations
+  roomCode   String
+  playerId   String
+  promptId   String
+  
+  room       Room   @relation(fields: [roomCode], references: [roomCode], onDelete: Cascade)
+  player     Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  prompt     Prompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  // Double check that a single player can only submit ONE answer per prompt
+  @@unique([playerId, promptId])
+}
