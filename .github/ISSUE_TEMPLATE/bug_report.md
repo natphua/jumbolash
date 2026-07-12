@@ -1,8 +1,6 @@
 ---
 name: Feature Task Issue
 about: Create a standard engineering issue ticket for JumboLash
-title: 'TASK: '
-labels: ['enhancement']
 ---
 
 # Title:
