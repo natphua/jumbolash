@@ -1,26 +1,87 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@font-face {
+  font-family: "Rockwell";
+  src: url("/fonts/rockwell.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* 3. Custom Utilities & Component Design Tokens */
+@theme {
+  --color-logo-blue: #0170c0;
+  --color-logo-green: #39761d;
+  --font-game-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* 4. Implement your jagged and game specific custom style modifiers */
+.game-title {
+  font-family: "Rockwell", serif;
+  font-weight: 900; /* Replaces font-black in raw CSS targeting */
+  text-transform: uppercase;
+  color: #ffffff;
+  filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 1));
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.game-header {
+  font-family: "Rockwell", serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #1e293b;
+  letter-spacing: 0.05em;
+}
+
+.game-box-jagged {
+  font-family: "Rockwell", serif;
+  border: 4px solid #000000;
+  font-weight: 800;
+  text-transform: uppercase;
+  box-shadow: 6px 6px 0px 0px #000000;
+  clip-path: polygon(2% 0%, 98% 3%, 100% 95%, 96% 100%, 4% 97%, 0% 92%);
+  transition:
+    transform 0.1s ease-in-out,
+    box-shadow 0.1s ease-in-out,
+    filter 0.1s ease-in-out;
+}
+
+.game-box-jagged:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 8px 8px 0px 0px #000000;
+  filter: brightness(1.1);
+}
+
+.game-box-jagged:active {
+  transform: translate(4px, 4px);
+  box-shadow: 2px 2px 0px 0px #000000;
+  filter: brightness(0.9);
+}
+
+/* 5. Uniform Comic-Style Input Boxes */
+.game-input {
+  font-family: var(--font-game-mono);
+  background-color: #2e323c;
+  color: #ffffff;
+  border: 1px solid #434c57;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  width: 100%;
+  display: block;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease-in-out;
+}
+
+.game-input::placeholder {
+  color: #64748b;
+}
+
+.game-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+/* Specific focus state for the Join panel path overrides */
+form[onSubmit*="handlePlayerJoin"] .game-input:focus {
+  border-color: #10b981;
 }
