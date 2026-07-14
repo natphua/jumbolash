@@ -1,3 +1,12 @@
+/**
+ * page.tsx
+ *
+ * The main page component for the application, rendering the lobby interface
+ * and managing the overall layout.
+ *
+ * Created on: 2026-07-12.
+ */
+
 import Image from "next/image";
 import LobbyManager from "./components/LobbyManager";
 

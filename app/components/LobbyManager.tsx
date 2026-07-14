@@ -2,7 +2,10 @@
  * LobbyManager.tsx
  *
  * Manages the lobby interface, providing users with options to either host a
- * game (admin) or join a game (team). Handles user input for room codes, nicknames, and admin authentication.
+ * game (admin) or join a game (team). Handles user input for room codes,
+ * nicknames, and admin authentication.
+ *
+ * Created on: 2026-07-13.
  */
 
 "use client";
