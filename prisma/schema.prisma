@@ -10,6 +10,9 @@ model Room {
   roomCode    String     @id @unique
   gameState   String     @default("LOBBY") // LOBBY, PROMPTING, VOTING, RESULTS
   roundNumber Int        @default(1)
+  totalRounds Int        @default(3)       
+  timerLimit  Int        @default(90)      
+  adminId     String?                      
   players     Player[]
   responses   Response[]
 }
@@ -21,11 +24,13 @@ model Player {
   points    Int        @default(0)
   room      Room       @relation(fields: [roomCode], references: [roomCode], onDelete: Cascade)
   responses Response[]
+
+  @@unique([roomCode, nickname])          // Guard constraint preventing duplicate names in the same room
 }
 
 model Prompt {
   id        String     @id @default(uuid())
-  text      String     // The actual question (e.g., "Best place to cry in Halligan")
+  text      String     // The actual question
   used      Boolean    @default(false)
   responses Response[]
 }

@@ -86,3 +86,23 @@
 form[onSubmit*="handlePlayerJoin"] .game-input:focus {
   border-color: #10b981;
 }
+
+/* 6. Dashboard Layout Cards & Components */
+.game-dashboard-card {
+  width: 100%;
+  padding: 1.5rem;
+  background-color: #ffffff;
+  border: 4px solid #000000;
+  box-shadow: 6px 6px 0px 0px #000000;
+  border-radius: 0.25rem;
+}
+
+.game-badge {
+  background-color: #e2e8f0;
+  padding: 0.25rem 0.75rem;
+  font-family: var(--font-game-mono);
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: #334155;
+  border-radius: 0.25rem;
+}

@@ -2,23 +2,18 @@
  * LobbyManager.tsx
  *
  * Manages the lobby interface, providing users with options to either host a
- * game (admin) or join a game (team). Handles user input for room codes,
- * nicknames, and admin authentication.
+ * game (admin) or join a game (team). Handles user input for room codes and
+ * team nicknames, executing room generation without requiring account login.
  *
- * Created on: 2026-07-13.
+ * Created on 2026-07-15 by Natalie Phua.
  */
 
 "use client";
 
 import { useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 
 export default function LobbyManager() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
-  const [view, setView] = useState<"home" | "create" | "join">("home");
+  const [view, setView] = useState<"home" | "join">("home");
   const [roomCode, setRoomCode] = useState("");
   const [nickname, setNickname] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -27,20 +22,21 @@ export default function LobbyManager() {
     return "";
   });
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const handleHostGame = async () => {
+    try {
+      const res = await fetch("/api/room", { method: "POST" });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
 
-  const handleAdminSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) alert(error.message);
-    else window.location.href = "/admin/dashboard";
+      window.location.href = "/admin/dashboard";
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Room creation failed";
+      alert(message);
+    }
   };
 
-  const handlePlayerJoin = (e: React.FormEvent) => {
+  const handlePlayerJoin = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!nickname || !roomCode) return alert("Fields cannot be blank!");
     localStorage.setItem("jumbolash_player_name", nickname);
@@ -52,7 +48,7 @@ export default function LobbyManager() {
       {view === "home" && (
         <div className="space-y-6">
           <button
-            onClick={() => setView("create")}
+            onClick={handleHostGame}
             className="game-box-jagged bg-logo-blue w-full py-4 text-xl cursor-pointer"
           >
             Host Game (Admin)
@@ -64,45 +60,6 @@ export default function LobbyManager() {
             Join Game (Teams)
           </button>
         </div>
-      )}
-
-      {view === "create" && (
-        <form onSubmit={handleAdminSignIn} className="space-y-4">
-          <h2 className="game-header text-center text-xl mb-2">
-            Admin Authentication
-          </h2>
-          <input
-            type="email"
-            placeholder="ADMIN EMAIL"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="game-input"
-          />
-          <input
-            type="password"
-            placeholder="PASSWORD"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="game-input"
-          />
-          <div className="flex gap-4 pt-2">
-            <button
-              type="button"
-              onClick={() => setView("home")}
-              className="game-box-jagged bg-slate-500 w-1/3 py-2 text-sm cursor-pointer"
-            >
-              Back
-            </button>
-            <button
-              type="submit"
-              className="game-box-jagged bg-logo-blue w-2/3 py-2 text-sm cursor-pointer"
-            >
-              Sign In
-            </button>
-          </div>
-        </form>
       )}
 
       {view === "join" && (

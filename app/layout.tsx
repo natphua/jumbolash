@@ -4,7 +4,7 @@
  * Defines the root layout for the application, wrapping all pages with global
  * styles and providing authentication context.
  *
- * Created on: 2026-07-12.
+ * Created on 2026-07-12 by Natalie Phua.
  */
 
 import "./globals.css";

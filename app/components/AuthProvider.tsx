@@ -4,7 +4,7 @@
  * Provides authentication context for the application, managing user sessions
  * and authentication state.
  *
- * Created on: 2026-07-13.
+ * Created on 2026-07-13 by Natalie Phua.
  */
 
 "use client";
