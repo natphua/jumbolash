@@ -26,9 +26,12 @@ export default function AdminDashboard() {
 
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
-  const [rounds, setRounds] = useState(3);
-  const [timer, setTimer] = useState(90);
   const [loading, setLoading] = useState(true);
+
+  const [rounds, setRounds] = useState<string>("3");
+  const [timer, setTimer] = useState<string>("90");
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const fetchRoomAndPlayers = async () => {
@@ -58,8 +61,8 @@ export default function AdminDashboard() {
       ]);
 
       if (roomRes.data) {
-        setRounds(roomRes.data.totalRounds);
-        setTimer(roomRes.data.timerLimit);
+        setRounds(String(roomRes.data.totalRounds));
+        setTimer(String(roomRes.data.timerLimit));
       }
       if (playersRes.data) {
         setPlayers(playersRes.data);
@@ -99,26 +102,69 @@ export default function AdminDashboard() {
     };
   }, [roomCode, supabase]);
 
+  const handleRoundsChange = (val: string) => {
+    if (val === "") {
+      setRounds("0");
+      return;
+    }
+    // Remove leading zero if user starts typing another number
+    const parsed = val.replace(/^0+/, "");
+    setRounds(parsed === "" ? "0" : parsed);
+  };
+
+  const handleTimerChange = (val: string) => {
+    if (val === "") {
+      setTimer("0");
+      return;
+    }
+    const parsed = val.replace(/^0+/, "");
+    setTimer(parsed === "" ? "0" : parsed);
+  };
+
   const saveSettings = async () => {
     if (!roomCode) return;
 
+    const parsedRounds = parseInt(rounds, 10);
+    const parsedTimer = parseInt(timer, 10);
+
+    // 1. Enforce validation criteria
+    if (isNaN(parsedRounds) || parsedRounds < 1 || parsedRounds > 10) {
+      setValidationError("Rounds must be between 1 and 10.");
+      return;
+    }
+
+    if (isNaN(parsedTimer) || parsedTimer < 30 || parsedTimer > 120) {
+      setValidationError("Countdown timer must be between 30 and 120 seconds.");
+      return;
+    }
+
+    // Clear any active errors if passing checks
+    setValidationError(null);
+
     const { error } = await supabase
       .from("Room")
-      .update({ totalRounds: rounds, timerLimit: timer })
+      .update({ totalRounds: parsedRounds, timerLimit: parsedTimer })
       .eq("roomCode", roomCode);
 
-    if (error)
-      alert("Failed to save parameter configurations: " + error.message);
-    else alert("Match configurations updated successfully.");
+    if (error) {
+      setValidationError(
+        "Failed to save parameter configurations: " + error.message,
+      );
+    } else {
+      alert("Match configurations updated successfully.");
+    }
   };
 
-  if (loading || !roomCode) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white font-mono">
-        ESTABLISHING MASTER HOST SESSION...
-      </div>
-    );
-  }
+  const copyRoomCode = async () => {
+    if (!roomCode) return;
+    try {
+      await navigator.clipboard.writeText(roomCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err: unknown) {
+      console.error("Failed to copy text: ", err);
+    }
+  };
 
   return (
     <main className="min-h-screen p-8 bg-slate-900 mt-5 text-slate-800 font-sans flex flex-col md:flex-row gap-8 items-start justify-center">
@@ -129,39 +175,42 @@ export default function AdminDashboard() {
         </h2>
         <div className="space-y-4">
           <div>
-            <label className="block text-s font-bold font-mono tracking-wider text-slate-500 mb-1">
+            <label className="block text-sm font-bold font-mono tracking-wider text-slate-500 mb-1">
               ROOM CODE
             </label>
-            <div className="game-input text-center text-4xl tracking-widest bg-slate-100 select-all border-2 border-dashed border-slate-400">
-              {roomCode}
+            <div className="relative flex items-center">
+              <div className="game-input text-center text-2xl tracking-widest bg-slate-100 select-all border-2 border-dashed border-slate-400 pr-20">
+                {roomCode}
+              </div>
+              <button
+                onClick={copyRoomCode}
+                className="absolute right-3 copy-btn cursor-pointer"
+              >
+                {copied ? "Copied!" : "Copy"}
+              </button>
             </div>
           </div>
 
           <div>
-            <label className="block text-s font-bold font-mono tracking-wider text-slate-500 mb-1">
-              TOTAL MATCH ROUNDS
+            <label className="block text-sm font-bold font-mono tracking-wider text-slate-500 mb-1">
+              TOTAL MATCH ROUNDS (1-10)
             </label>
             <input
               type="number"
-              min={1}
-              max={10}
               value={rounds}
-              onChange={(e) => setRounds(Number(e.target.value))}
+              onChange={(e) => handleRoundsChange(e.target.value)}
               className="game-input text-center"
             />
           </div>
 
           <div>
-            <label className="block text-s font-bold font-mono tracking-wider text-slate-500 mb-1">
-              ANSWER COUNTDOWN TIMER (SEC)
+            <label className="block text-sm font-bold font-mono tracking-wider text-slate-500 mb-1">
+              ANSWER COUNTDOWN TIMER (30-120 SEC)
             </label>
             <input
               type="number"
-              min={10}
-              max={300}
-              step={5}
               value={timer}
-              onChange={(e) => setTimer(Number(e.target.value))}
+              onChange={(e) => handleTimerChange(e.target.value)}
               className="game-input text-center"
             />
           </div>
@@ -172,6 +221,10 @@ export default function AdminDashboard() {
           >
             UPDATE GAME RULES
           </button>
+
+          {validationError && (
+            <p className="error-text mt-2">{validationError}</p>
+          )}
         </div>
       </div>
 
@@ -179,7 +232,7 @@ export default function AdminDashboard() {
       <div className="w-full md:w-2/3 game-dashboard-card min-h-[400px]">
         <div className="flex justify-between items-center mb-6 border-b-2 border-black pb-2">
           <h2 className="game-header text-xl">WAITING ARENA LOBBY</h2>
-          <span className="game-badge">PLAYERS JOINED: {players.length}</span>
+          <span className="game-badge">PLAYERS JOINED: {players.length} </span>
         </div>
 
         {players.length === 0 ? (

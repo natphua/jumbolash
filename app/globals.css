@@ -106,3 +106,29 @@ form[onSubmit*="handlePlayerJoin"] .game-input:focus {
   color: #334155;
   border-radius: 0.25rem;
 }
+
+/* 7. Action Utilities */
+.copy-btn {
+  background-color: #000000;
+  color: #ffffff;
+  font-family: var(--font-game-mono);
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  text-transform: uppercase;
+  transition: background-color 0.1s ease-in-out;
+}
+
+.copy-btn:hover {
+  background-color: #1e293b; /* slate-800 */
+}
+
+.error-text {
+  color: #d93d3d; /* red-500 */
+  font-family: var(--font-game-mono);
+  font-weight: 700;
+  font-size: 0.875rem;
+  text-align: center;
+  text-transform: uppercase;
+}
