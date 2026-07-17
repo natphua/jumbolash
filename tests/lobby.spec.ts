@@ -20,10 +20,13 @@ test.describe("BE-2: Admin Room Creation and Configuration Flow", () => {
     // 2. Click the Host Game button to trigger the API route and redirect
     const hostButton = page.locator('button:has-text("Host Game (Admin)")');
     await expect(hostButton).toBeVisible();
-    await hostButton.click();
+    await hostButton.click({ timeout: 15000 });
 
     // 3. Verify page redirects to the Admin Dashboard
-    await page.waitForURL("**/admin/dashboard");
+    await page.waitForURL("**/admin/dashboard", {
+      timeout: 20000,
+      waitUntil: "load",
+    });
     await expect(page).toHaveURL(/.*\/admin\/dashboard/);
 
     // 4. Verify the 'hosted_room_code' cookie was successfully set
@@ -41,6 +44,8 @@ test.describe("BE-2: Admin Room Creation and Configuration Flow", () => {
     // 6. Verify validation limits - Invalid total rounds (e.g., 11)
     const roundsInput = page.locator('input[type="number"]').first();
     await roundsInput.fill("11");
+    // Force WebKit to wait until the DOM frame and React state sync the value completely
+    await expect(roundsInput).toHaveValue("11");
 
     const updateButton = page.locator('button:has-text("UPDATE GAME RULES")');
     await updateButton.click();
@@ -51,10 +56,14 @@ test.describe("BE-2: Admin Room Creation and Configuration Flow", () => {
       "Rounds must be between 1 and 10.",
     );
 
-    // 7. Verify validation limits - Invalid countdown timer (e.g., 20 seconds)
-    await roundsInput.fill("5"); // Correct the rounds back to valid
+    // 7. Verify validation limits - Invalid countdown timer
+    await roundsInput.fill("5");
+    await expect(roundsInput).toHaveValue("5");
+
     const timerInput = page.locator('input[type="number"]').last();
     await timerInput.fill("20");
+    await expect(timerInput).toHaveValue("20");
+
     await updateButton.click();
     await expect(errorMessage).toContainText(
       "Countdown timer must be between 30 and 120 seconds.",
@@ -62,8 +71,8 @@ test.describe("BE-2: Admin Room Creation and Configuration Flow", () => {
 
     // 8. Verify success path works with correct configurations
     await timerInput.fill("60");
+    await expect(timerInput).toHaveValue("60");
 
-    // Setup listener to intercept standard window alert dialogues
     page.once("dialog", async (dialog) => {
       expect(dialog.message()).toContain(
         "Match configurations updated successfully.",
@@ -76,11 +85,8 @@ test.describe("BE-2: Admin Room Creation and Configuration Flow", () => {
   });
 
   test("LB-2: Unauthenticated session dashboard redirect", async ({ page }) => {
-    // Navigate directly to the admin dashboard with no active cookie context
     await page.goto("/admin/dashboard");
-
-    // Once loaded, the useEffect hook should detect missing credentials and force a home redirect
-    await page.waitForURL("/");
+    await page.waitForURL("/", { timeout: 15000 });
     await expect(page).toHaveURL(/.*\/$/);
   });
 });
