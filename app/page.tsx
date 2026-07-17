@@ -1,3 +1,12 @@
+/**
+ * page.tsx
+ *
+ * The main page component for the application, rendering the lobby interface
+ * and managing the overall layout.
+ *
+ * Created on 2026-07-12 by Natalie Phua.
+ */
+
 import Image from "next/image";
 import LobbyManager from "./components/LobbyManager";
 
@@ -24,7 +33,7 @@ export default function Home() {
           width={450}
           height={200}
           priority
-          style={{ height: "auto" }}
+          style={{ width: "100%", height: "auto" }}
           className="drop-shadow-[0_8px_0_rgba(0,0,0,1)] object-contain"
         />
       </div>
