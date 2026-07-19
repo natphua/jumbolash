@@ -128,6 +128,32 @@ export default function WaitingRoomPage() {
     };
   }, [roomCode, supabase, router]);
 
+  const handleLeaveRoom = async () => {
+    const confirmLeave = confirm(
+      "Are you sure you want to leave this game lobby?",
+    );
+    if (!confirmLeave) return;
+
+    try {
+      const cookies = document.cookie.split("; ");
+      const idCookie = cookies.find((row) => row.startsWith("player_id="));
+      const playerId = idCookie ? idCookie.split("=")[1] : null;
+
+      if (playerId) {
+        // Remove individual identity row from database
+        await supabase.from("Player").delete().eq("id", playerId);
+      }
+
+      // Evaporate local client storage cookies
+      document.cookie = "player_id=; path=/; maxAge=-1;";
+      document.cookie = "player_nickname=; path=/; maxAge=-1;";
+
+      router.push("/");
+    } catch (err) {
+      console.error("Failed to process lobby exit:", err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-900 font-mono text-slate-400">
@@ -155,7 +181,17 @@ export default function WaitingRoomPage() {
   }
 
   return (
-    <main className="min-h-screen p-8 bg-slate-900 mt-5 flex flex-col items-center justify-start font-sans">
+    <main className="min-h-screen p-8 bg-slate-900 flex flex-col items-center justify-start font-sans relative">
+      {/* Top Left Navigation Action Row */}
+      <div className="w-full max-w-3xl flex justify-start mb-4 mt-2">
+        <button
+          onClick={handleLeaveRoom}
+          className="game-box-jagged bg-amber-600 text-white px-5 py-2 text-sm cursor-pointer hover:bg-amber-700"
+        >
+          LEAVE ROOM
+        </button>
+      </div>
+
       <div className="w-full max-w-3xl space-y-8">
         {/* Waiting Arena Meta Header Panel */}
         <div className="game-dashboard-card flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -196,7 +232,9 @@ export default function WaitingRoomPage() {
                   key={player.id}
                   className="waiting-grid-cell flex items-center justify-between gap-2 truncate"
                 >
-                  <span className="truncate">{player.nickname}</span>
+                  <span className="truncate text-slate-800">
+                    {player.nickname}
+                  </span>
                   <span className="status-badge-ready shrink-0">READY</span>
                 </div>
               ))}

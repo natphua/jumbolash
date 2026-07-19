@@ -168,99 +168,135 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleEndRoom = async () => {
+    if (!roomCode) return;
+
+    const confirmEnd = confirm(
+      "Are you sure you want to completely end this game session? All players will be disconnected.",
+    );
+    if (!confirmEnd) return;
+
+    try {
+      // 1. Terminate the database room record (Cascade rules will wipe out the Player records)
+      await supabase.from("Room").delete().eq("roomCode", roomCode);
+
+      // 2. Erase the tracking credentials from the local browser cookies
+      document.cookie = "hosted_room_code=; path=/; maxAge=-1;";
+
+      // 3. Return the host back to the main management hub
+      router.replace("/");
+    } catch (err) {
+      console.error("Failed to cleanly dissolve game room:", err);
+    }
+  };
+
   return (
-    <main className="min-h-screen p-8 bg-slate-900 mt-5 text-slate-800 font-sans flex flex-col md:flex-row gap-8 items-start justify-center">
-      {/* Settings Configuration Card Panel */}
-      <div className="w-full md:w-1/3 game-dashboard-card">
-        <h2 className="game-header text-xl mb-4 border-b-2 border-black pb-2">
-          ROOM CONFIGURATIONS
-        </h2>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-bold font-mono tracking-wider text-slate-500 mb-1">
-              ROOM CODE
-            </label>
-            <div className="relative flex items-center">
-              <div className="game-input text-center text-2xl tracking-widest bg-slate-100 select-all border-2 border-dashed border-slate-400 pr-20">
-                {roomCode}
-              </div>
-              <button
-                onClick={copyRoomCode}
-                className="absolute right-3 copy-btn cursor-pointer"
-              >
-                {copied ? "Copied!" : "Copy"}
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold font-mono tracking-wider text-slate-500 mb-1">
-              TOTAL MATCH ROUNDS (1-10)
-            </label>
-            <input
-              type="number"
-              value={rounds}
-              onChange={(e) => handleRoundsChange(e.target.value)}
-              className="game-input text-center"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold font-mono tracking-wider text-slate-500 mb-1">
-              ANSWER COUNTDOWN TIMER (30-120 SEC)
-            </label>
-            <input
-              type="number"
-              value={timer}
-              onChange={(e) => handleTimerChange(e.target.value)}
-              className="game-input text-center"
-            />
-          </div>
-
-          <button
-            onClick={saveSettings}
-            className="game-box-jagged bg-logo-blue w-full py-3 mt-2 text-md text-white cursor-pointer"
-          >
-            UPDATE GAME RULES
-          </button>
-
-          {validationError && (
-            <p className="error-text mt-2">{validationError}</p>
-          )}
-        </div>
+    <main className="min-h-screen p-8 bg-slate-900 text-slate-800 font-sans flex flex-col items-center justify-start relative">
+      {/* Top Left Navigation Action Row */}
+      <div className="w-full max-w-6xl flex justify-start mb-4 mt-2">
+        <button
+          onClick={handleEndRoom}
+          className="game-box-jagged bg-rose-700 text-white px-5 py-2 text-sm cursor-pointer hover:bg-rose-800"
+        >
+          END ROOM
+        </button>
       </div>
 
-      {/* Real-time Connected Players Tracking Grid */}
-      <div className="w-full md:w-2/3 game-dashboard-card min-h-100">
-        <div className="flex justify-between items-center mb-6 border-b-2 border-black pb-2">
-          <h2 className="game-header text-xl">WAITING ARENA LOBBY</h2>
-          <span className="game-badge">PLAYERS JOINED: {players.length} </span>
+      <div className="w-full max-w-6xl flex flex-col md:flex-row gap-8 items-start justify-center">
+        {/* Settings Configuration Card Panel */}
+        <div className="w-full md:w-1/3 game-dashboard-card">
+          <h2 className="game-header text-xl mb-4 border-b-2 border-black pb-2">
+            ROOM CONFIGURATIONS
+          </h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-bold font-mono tracking-wider text-slate-500 mb-1">
+                ROOM CODE
+              </label>
+              <div className="relative flex items-center">
+                <div className="game-input text-center text-2xl tracking-widest bg-slate-100 select-all border-2 border-dashed border-slate-400 pr-20">
+                  {roomCode}
+                </div>
+                <button
+                  onClick={copyRoomCode}
+                  className="absolute right-3 copy-btn cursor-pointer"
+                >
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold font-mono tracking-wider text-slate-500 mb-1">
+                TOTAL MATCH ROUNDS (1-10)
+              </label>
+              <input
+                type="number"
+                value={rounds}
+                onChange={(e) => handleRoundsChange(e.target.value)}
+                className="game-input text-center"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold font-mono tracking-wider text-slate-500 mb-1">
+                ANSWER COUNTDOWN TIMER (30-120 SEC)
+              </label>
+              <input
+                type="number"
+                value={timer}
+                onChange={(e) => handleTimerChange(e.target.value)}
+                className="game-input text-center"
+              />
+            </div>
+
+            <button
+              onClick={saveSettings}
+              className="game-box-jagged bg-logo-blue w-full py-3 mt-2 text-md text-white cursor-pointer"
+            >
+              UPDATE GAME RULES
+            </button>
+
+            {validationError && (
+              <p className="error-text mt-2">{validationError}</p>
+            )}
+          </div>
         </div>
 
-        {players.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <p className="font-mono text-m text-slate-400 animate-pulse uppercase tracking-widest">
-              WAITING FOR TEAMS TO JOIN...
-            </p>
+        {/* Real-time Connected Players Tracking Grid */}
+        <div className="w-full md:w-2/3 game-dashboard-card min-h-100">
+          <div className="flex justify-between items-center mb-6 border-b-2 border-black pb-2">
+            <h2 className="game-header text-xl">WAITING ARENA LOBBY</h2>
+            <span className="game-badge">
+              PLAYERS JOINED: {players.length}{" "}
+            </span>
           </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {players.map((player) => (
-              <div
-                key={player.id}
-                className="p-3 bg-slate-50 border-2 border-black font-mono font-bold text-center uppercase text-sm rounded shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] truncate"
-              >
-                {player.nickname}
-              </div>
-            ))}
-          </div>
-        )}
 
-        {players.length >= 2 && (
-          <button className="game-box-jagged bg-logo-green w-full py-4 mt-8 text-xl text-white cursor-pointer">
-            LAUNCH MATCH STATE
-          </button>
-        )}
+          {players.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <p className="font-mono text-m text-slate-400 animate-pulse uppercase tracking-widest">
+                WAITING FOR TEAMS TO JOIN...
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {players.map((player) => (
+                <div
+                  key={player.id}
+                  className="p-3 bg-slate-50 border-2 border-black font-mono font-bold text-center uppercase text-sm rounded shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] truncate"
+                >
+                  {player.nickname}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {players.length >= 2 && (
+            <button className="game-box-jagged bg-logo-green w-full py-4 mt-8 text-xl text-white cursor-pointer">
+              LAUNCH MATCH STATE
+            </button>
+          )}
+        </div>
       </div>
     </main>
   );
