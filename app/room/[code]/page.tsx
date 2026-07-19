@@ -12,7 +12,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+import { supabase } from "@/lib/supabase";
 
 interface Player {
   id: string;
@@ -34,11 +34,6 @@ export default function WaitingRoomPage() {
   const [roomData, setRoomData] = useState<RoomData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
 
   // Effect 1: Handles the initial data loading on mount
   useEffect(() => {
@@ -126,7 +121,7 @@ export default function WaitingRoomPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomCode, supabase, router]);
+  }, [roomCode, router]);
 
   const handleLeaveRoom = async () => {
     const confirmLeave = confirm(
@@ -141,12 +136,17 @@ export default function WaitingRoomPage() {
 
       if (playerId) {
         // Remove individual identity row from database
-        await supabase.from("Player").delete().eq("id", playerId);
+        const { error } = await supabase
+          .from("Player")
+          .delete()
+          .eq("id", playerId);
+
+        if (error) throw error;
       }
 
       // Evaporate local client storage cookies
-      document.cookie = "player_id=; path=/; maxAge=-1;";
-      document.cookie = "player_nickname=; path=/; maxAge=-1;";
+      document.cookie = "player_id=; path=/; Max-Age=0;";
+      document.cookie = "player_nickname=; path=/; Max-Age=0;";
 
       router.push("/");
     } catch (err) {

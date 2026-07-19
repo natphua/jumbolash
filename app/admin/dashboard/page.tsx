@@ -11,8 +11,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 interface Player {
   id: string;
@@ -20,11 +20,6 @@ interface Player {
 }
 
 export default function AdminDashboard() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
-
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +31,8 @@ export default function AdminDashboard() {
   const router = useRouter();
 
   useEffect(() => {
+    let isActive = true;
+
     const fetchRoomAndPlayers = async () => {
       // Pull host credentials from the cookie
       const cookies = document.cookie.split("; ");
@@ -50,6 +47,8 @@ export default function AdminDashboard() {
         return;
       }
 
+      if (!isActive) return;
+
       setRoomCode(code);
 
       // Fetch parameters and players using the public Supabase clients
@@ -62,6 +61,8 @@ export default function AdminDashboard() {
         supabase.from("Player").select("id, nickname").eq("roomCode", code),
       ]);
 
+      if (!isActive) return;
+
       if (roomRes.data) {
         setRounds(String(roomRes.data.totalRounds));
         setTimer(String(roomRes.data.timerLimit));
@@ -73,7 +74,11 @@ export default function AdminDashboard() {
     };
 
     fetchRoomAndPlayers();
-  }, [supabase, router]);
+
+    return () => {
+      isActive = false;
+    };
+  }, [router]);
 
   // Set up real-time socket listener
   useEffect(() => {
@@ -102,7 +107,7 @@ export default function AdminDashboard() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomCode, supabase]);
+  }, [roomCode]);
 
   const handleRoundsChange = (val: string) => {
     if (val === "") {
@@ -172,16 +177,21 @@ export default function AdminDashboard() {
     if (!roomCode) return;
 
     const confirmEnd = confirm(
-      "Are you sure you want to completely end this game session? All players will be disconnected.",
+      "Are you sure you want to end this game session? All players will be disconnected.",
     );
     if (!confirmEnd) return;
 
     try {
       // 1. Terminate the database room record (Cascade rules will wipe out the Player records)
-      await supabase.from("Room").delete().eq("roomCode", roomCode);
+      const { error } = await supabase
+        .from("Room")
+        .delete()
+        .eq("roomCode", roomCode);
+
+      if (error) throw error;
 
       // 2. Erase the tracking credentials from the local browser cookies
-      document.cookie = "hosted_room_code=; path=/; maxAge=-1;";
+      document.cookie = "hosted_room_code=; path=/; Max-Age=0;";
 
       // 3. Return the host back to the main management hub
       router.replace("/");
@@ -189,6 +199,16 @@ export default function AdminDashboard() {
       console.error("Failed to cleanly dissolve game room:", err);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-900 font-mono text-slate-400">
+        <p className="animate-pulse uppercase tracking-widest">
+          SYNCING HOST DASHBOARD...
+        </p>
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-screen p-8 bg-slate-900 text-slate-800 font-sans flex flex-col items-center justify-start relative">
@@ -214,7 +234,10 @@ export default function AdminDashboard() {
                 ROOM CODE
               </label>
               <div className="relative flex items-center">
-                <div className="game-input text-center text-2xl tracking-widest bg-slate-100 select-all border-2 border-dashed border-slate-400 pr-20">
+                <div
+                  className="game-input text-center text-2xl tracking-widest bg-slate-100 select-all border-2 border-dashed border-slate-400 pr-20"
+                  data-testid="room-code-display"
+                >
                   {roomCode}
                 </div>
                 <button

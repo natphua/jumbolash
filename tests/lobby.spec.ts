@@ -9,7 +9,7 @@
 
 import { test, expect } from "@playwright/test";
 
-test.describe("BE-2: Admin Room Creation and Configuration Flow", () => {
+test.describe("Admin Room Creation and Configuration Flow", () => {
   test("LB-1: Admin game hosting and settings configuration", async ({
     page,
     context,

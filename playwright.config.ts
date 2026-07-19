@@ -1,12 +1,28 @@
 import { defineConfig, devices } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
 
 /**
  * Read environment variables from file.
  * https://github.com/motdotla/dotenv
  */
-// import dotenv from 'dotenv';
-// import path from 'path';
-// dotenv.config({ path: path.resolve(__dirname, '.env') });
+const envPath = path.resolve(__dirname, ".env");
+
+if (fs.existsSync(envPath)) {
+  const envFile = fs.readFileSync(envPath, "utf8");
+
+  for (const line of envFile.split(/\r?\n/)) {
+    const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+    if (!match) continue;
+
+    const [, key, rawValue = ""] = match;
+    if (key in process.env) continue;
+
+    process.env[key] = rawValue
+      .replace(/^(['"])(.*)\1$/, "$2")
+      .replace(/\\n/g, "\n");
+  }
+}
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -72,8 +88,9 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: "npm run build && npm run start",
+    command: "npm run dev",
     url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000,
+    reuseExistingServer: true,
   },
 });
