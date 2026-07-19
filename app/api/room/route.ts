@@ -9,7 +9,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { generateRoomCode } from "@/lib/room-code";
+import { generateRoomCode } from "@/lib/helpers/room-code";
 
 /**
  * @description Creates a unique game room.

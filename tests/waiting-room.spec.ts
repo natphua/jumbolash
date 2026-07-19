@@ -1,6 +1,6 @@
 import { test, expect, BrowserContext, Page } from "@playwright/test";
 import { prisma } from "../lib/prisma";
-import { generateRoomCode } from "../lib/room-code";
+import { generateRoomCode } from "../lib/helpers/room-code";
 
 test.describe("Waiting Room and Real-time Sync", () => {
   let adminContext: BrowserContext;
@@ -49,10 +49,7 @@ test.describe("Waiting Room and Real-time Sync", () => {
       await playerPage.goto(`/`);
       await playerPage.click("button:has-text('JOIN GAME (TEAMS)')");
       await playerPage.fill('input[placeholder*="ROOM CODE"]', targetRoomCode);
-      await playerPage.fill(
-        'input[placeholder*="NICKNAME"]',
-        "EleventhPlayer",
-      );
+      await playerPage.fill('input[placeholder*="NICKNAME"]', "EleventhPlayer");
 
       const dialogPromise = playerPage.waitForEvent("dialog");
       await playerPage.click("button:has-text('ENTER ROOM')");

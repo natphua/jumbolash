@@ -98,6 +98,24 @@ export default function WaitingRoomPage() {
           }
         },
       )
+      // Listener A.2: Watch for room closure/deletion from the host
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "Room",
+          filter: `roomCode=eq.${roomCode}`,
+        },
+        () => {
+          alert("Host has closed this room");
+
+          // Clear player tracking cookie if your application assigns one here
+          document.cookie = "player_nickname=; path=/; Max-Age=0;";
+
+          router.replace("/");
+        },
+      )
       // Listener B: Watch for roster changes (players joining or dropping out)
       .on(
         "postgres_changes",

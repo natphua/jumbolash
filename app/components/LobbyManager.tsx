@@ -60,7 +60,7 @@ export default function LobbyManager() {
         return;
       }
 
-      // Success -> redirect them to the waiting room route
+      // Success - redirect them to the waiting room route
       router.push(`/room/${data.roomCode}`);
     } catch (err) {
       console.error("Network or client processing error:", err);
