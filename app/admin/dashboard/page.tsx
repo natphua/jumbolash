@@ -1,9 +1,9 @@
 /**
  * page.tsx (admin/dashboard)
  *
- * Renders the master administrative dashboard panel. Verifies hosting privileges
- * by checking active session cookies, configures game parameters, and lists
- * players in real-time.
+ * Handles admin live sockets, game configuration updates, and real-time roster
+ * syncrhonization via Supabase. Provides a single-page interface for game
+ * hosting and management.
  *
  * Created on 2026-07-15 by Natalie Phua.
  */
@@ -13,6 +13,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import RoomSettingsPanel from "../../components/admin/RoomSettingsPanel";
+import AdminRosterPanel from "../../components/admin/AdminRosterPanel";
 
 interface Player {
   id: string;
@@ -30,11 +32,11 @@ export default function AdminDashboard() {
   const [copied, setCopied] = useState(false);
   const router = useRouter();
 
+  // Effect 1: Fetches the room code and initial player roster on mount
   useEffect(() => {
     let isActive = true;
 
     const fetchRoomAndPlayers = async () => {
-      // Pull host credentials from the cookie
       const cookies = document.cookie.split("; ");
       const roomCookie = cookies.find((row) =>
         row.startsWith("hosted_room_code="),
@@ -51,7 +53,6 @@ export default function AdminDashboard() {
 
       setRoomCode(code);
 
-      // Fetch parameters and players using the public Supabase clients
       const [roomRes, playersRes] = await Promise.all([
         supabase
           .from("Room")
@@ -80,7 +81,7 @@ export default function AdminDashboard() {
     };
   }, [router]);
 
-  // Set up real-time socket listener
+  // Effect 2: Sets up supabase real-time subscription for player roster changes
   useEffect(() => {
     if (!roomCode) return;
 
@@ -114,7 +115,6 @@ export default function AdminDashboard() {
       setRounds("0");
       return;
     }
-    // Remove leading zero if user starts typing another number
     const parsed = val.replace(/^0+/, "");
     setRounds(parsed === "" ? "0" : parsed);
   };
@@ -134,7 +134,6 @@ export default function AdminDashboard() {
     const parsedRounds = parseInt(rounds, 10);
     const parsedTimer = parseInt(timer, 10);
 
-    // 1. Enforce validation criteria
     if (isNaN(parsedRounds) || parsedRounds < 1 || parsedRounds > 10) {
       setValidationError("Rounds must be between 1 and 10.");
       return;
@@ -145,7 +144,6 @@ export default function AdminDashboard() {
       return;
     }
 
-    // Clear any active errors if passing checks
     setValidationError(null);
 
     const { error } = await supabase
@@ -182,7 +180,6 @@ export default function AdminDashboard() {
     if (!confirmEnd) return;
 
     try {
-      // 1. Terminate the database room record (Cascade rules will wipe out the Player records)
       const { error } = await supabase
         .from("Room")
         .delete()
@@ -190,10 +187,7 @@ export default function AdminDashboard() {
 
       if (error) throw error;
 
-      // 2. Erase the tracking credentials from the local browser cookies
       document.cookie = "hosted_room_code=; path=/; Max-Age=0;";
-
-      // 3. Return the host back to the main management hub
       router.replace("/");
     } catch (err) {
       console.error("Failed to cleanly dissolve game room:", err);
@@ -212,7 +206,6 @@ export default function AdminDashboard() {
 
   return (
     <main className="min-h-screen p-8 bg-slate-900 text-slate-800 font-sans flex flex-col items-center justify-start relative">
-      {/* Top Left Navigation Action Row */}
       <div className="w-full max-w-6xl flex justify-start mb-4 mt-2">
         <button
           onClick={handleEndRoom}
@@ -223,103 +216,19 @@ export default function AdminDashboard() {
       </div>
 
       <div className="w-full max-w-6xl flex flex-col md:flex-row gap-8 items-start justify-center">
-        {/* Settings Configuration Card Panel */}
-        <div className="w-full md:w-1/3 game-dashboard-card">
-          <h2 className="game-header text-xl mb-4 border-b-2 border-black pb-2">
-            ROOM CONFIGURATIONS
-          </h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-bold font-mono tracking-wider text-slate-500 mb-1">
-                ROOM CODE
-              </label>
-              <div className="relative flex items-center">
-                <div
-                  className="game-input text-center text-2xl tracking-widest bg-slate-100 select-all border-2 border-dashed border-slate-400 pr-20"
-                  data-testid="room-code-display"
-                >
-                  {roomCode}
-                </div>
-                <button
-                  onClick={copyRoomCode}
-                  className="absolute right-3 copy-btn cursor-pointer"
-                >
-                  {copied ? "Copied!" : "Copy"}
-                </button>
-              </div>
-            </div>
+        <RoomSettingsPanel
+          roomCode={roomCode}
+          rounds={rounds}
+          timer={timer}
+          validationError={validationError}
+          copied={copied}
+          onRoundsChange={handleRoundsChange}
+          onTimerChange={handleTimerChange}
+          onSaveSettings={saveSettings}
+          onCopyRoomCode={copyRoomCode}
+        />
 
-            <div>
-              <label className="block text-sm font-bold font-mono tracking-wider text-slate-500 mb-1">
-                TOTAL MATCH ROUNDS (1-10)
-              </label>
-              <input
-                type="number"
-                value={rounds}
-                onChange={(e) => handleRoundsChange(e.target.value)}
-                className="game-input text-center"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold font-mono tracking-wider text-slate-500 mb-1">
-                ANSWER COUNTDOWN TIMER (30-120 SEC)
-              </label>
-              <input
-                type="number"
-                value={timer}
-                onChange={(e) => handleTimerChange(e.target.value)}
-                className="game-input text-center"
-              />
-            </div>
-
-            <button
-              onClick={saveSettings}
-              className="game-box-jagged bg-logo-blue w-full py-3 mt-2 text-md text-white cursor-pointer"
-            >
-              UPDATE GAME RULES
-            </button>
-
-            {validationError && (
-              <p className="error-text mt-2">{validationError}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Real-time Connected Players Tracking Grid */}
-        <div className="w-full md:w-2/3 game-dashboard-card min-h-100">
-          <div className="flex justify-between items-center mb-6 border-b-2 border-black pb-2">
-            <h2 className="game-header text-xl">WAITING ARENA LOBBY</h2>
-            <span className="game-badge">
-              PLAYERS JOINED: {players.length}{" "}
-            </span>
-          </div>
-
-          {players.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <p className="font-mono text-m text-slate-400 animate-pulse uppercase tracking-widest">
-                WAITING FOR TEAMS TO JOIN...
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {players.map((player) => (
-                <div
-                  key={player.id}
-                  className="p-3 bg-slate-50 border-2 border-black font-mono font-bold text-center uppercase text-sm rounded shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] truncate"
-                >
-                  {player.nickname}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {players.length >= 2 && (
-            <button className="game-box-jagged bg-logo-green w-full py-4 mt-8 text-xl text-white cursor-pointer">
-              LAUNCH MATCH STATE
-            </button>
-          )}
-        </div>
+        <AdminRosterPanel players={players} />
       </div>
     </main>
   );
