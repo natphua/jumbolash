@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import { useRouter } from "next/navigation";
 
 interface Player {
   id: string;
@@ -32,6 +33,7 @@ export default function AdminDashboard() {
   const [timer, setTimer] = useState<string>("90");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     const fetchRoomAndPlayers = async () => {
@@ -44,7 +46,7 @@ export default function AdminDashboard() {
 
       if (!code) {
         alert("No active game room found for this hosting session.");
-        window.location.href = "/";
+        router.push("/");
         return;
       }
 
@@ -71,7 +73,7 @@ export default function AdminDashboard() {
     };
 
     fetchRoomAndPlayers();
-  }, [supabase]);
+  }, [supabase, router]);
 
   // Set up real-time socket listener
   useEffect(() => {
@@ -229,7 +231,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Real-time Connected Players Tracking Grid */}
-      <div className="w-full md:w-2/3 game-dashboard-card min-h-[400px]">
+      <div className="w-full md:w-2/3 game-dashboard-card min-h-100">
         <div className="flex justify-between items-center mb-6 border-b-2 border-black pb-2">
           <h2 className="game-header text-xl">WAITING ARENA LOBBY</h2>
           <span className="game-badge">PLAYERS JOINED: {players.length} </span>
