@@ -11,6 +11,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function LobbyManager() {
   const [view, setView] = useState<"home" | "join">("home");
@@ -22,13 +23,15 @@ export default function LobbyManager() {
     return "";
   });
 
+  const router = useRouter();
+
   const handleHostGame = async () => {
     try {
       const res = await fetch("/api/room", { method: "POST" });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
-      window.location.href = "/admin/dashboard";
+      router.replace("/admin/dashboard");
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Room creation failed";
@@ -36,12 +39,33 @@ export default function LobbyManager() {
     }
   };
 
-  const handlePlayerJoin = (e: React.FormEvent<HTMLFormElement>) => {
+  async function handlePlayerJoin(e: React.FormEvent) {
     e.preventDefault();
-    if (!nickname || !roomCode) return alert("Fields cannot be blank!");
-    localStorage.setItem("jumbolash_player_name", nickname);
-    window.location.href = `/room/${roomCode.toUpperCase()}`;
-  };
+
+    try {
+      const response = await fetch("/api/room", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomCode: roomCode,
+          nickname: nickname,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error("Join failed error message:", data.error);
+        alert(data.error);
+        return;
+      }
+
+      // Success - redirect them to the waiting room route
+      router.push(`/room/${data.roomCode}`);
+    } catch (err) {
+      console.error("Network or client processing error:", err);
+    }
+  }
 
   return (
     <div className="w-full max-w-md p-8 bg-white border-4 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] z-10 clip-path-[polygon(1%_1%,_99%_2%,_100%_98%,_97%_100%,_2%_99%,_0%_96%)]">
@@ -81,7 +105,7 @@ export default function LobbyManager() {
             placeholder="TEAM NICKNAME"
             maxLength={16}
             value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
+            onChange={(e) => setNickname(e.target.value.trim())}
             required
             className="game-input text-center tracking-wide"
           />

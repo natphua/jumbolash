@@ -11,8 +11,7 @@ model Room {
   gameState   String     @default("LOBBY") // LOBBY, PROMPTING, VOTING, RESULTS
   roundNumber Int        @default(1)
   totalRounds Int        @default(3)       
-  timerLimit  Int        @default(90)      
-  adminId     String?                      
+  timerLimit  Int        @default(90)               
   players     Player[]
   responses   Response[]
 }

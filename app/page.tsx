@@ -8,7 +8,7 @@
  */
 
 import Image from "next/image";
-import LobbyManager from "./components/LobbyManager";
+import LobbyManager from "./components/lobby/LobbyManager";
 
 export default function Home() {
   return (

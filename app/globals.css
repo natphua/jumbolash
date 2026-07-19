@@ -17,10 +17,10 @@
     "Courier New", monospace;
 }
 
-/* 4. Implement your jagged and game specific custom style modifiers */
+/* 4. Game specific boxes and headers */
 .game-title {
   font-family: "Rockwell", serif;
-  font-weight: 900; /* Replaces font-black in raw CSS targeting */
+  font-weight: 900;
   text-transform: uppercase;
   color: #ffffff;
   filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 1));
@@ -82,7 +82,6 @@
   border-color: #3b82f6;
 }
 
-/* Specific focus state for the Join panel path overrides */
 form[onSubmit*="handlePlayerJoin"] .game-input:focus {
   border-color: #10b981;
 }
@@ -131,4 +130,29 @@ form[onSubmit*="handlePlayerJoin"] .game-input:focus {
   font-size: 0.875rem;
   text-align: center;
   text-transform: uppercase;
+}
+
+/* 8. Waiting Room Custom Layouts */
+.waiting-grid-cell {
+  padding: 0.75rem;
+  background-color: #f8fafc; /* slate-50 */
+  border: 2px solid #000000;
+  font-family: var(--font-game-mono);
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  font-size: 0.875rem;
+  border-radius: 0.25rem;
+  box-shadow: 2px 2px 0px 0px #000000;
+}
+
+.status-badge-ready {
+  background-color: #dcfce7; /* green-100 */
+  color: #166534; /* green-800 */
+  border: 1px solid #15803d;
+  padding: 0.125rem 0.5rem;
+  font-family: var(--font-game-mono);
+  font-weight: 700;
+  font-size: 0.75rem;
+  border-radius: 0.25rem;
 }
