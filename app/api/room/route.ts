@@ -163,7 +163,15 @@ export async function GET(req: Request) {
 
     const room = await prisma.room.findUnique({
       where: { roomCode },
-      include: { players: true },
+      include: {
+        activePrompt: {
+          select: {
+            id: true,
+            text: true,
+          },
+        },
+        players: true,
+      },
     });
 
     if (!room) {

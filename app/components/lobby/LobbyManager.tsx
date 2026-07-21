@@ -60,6 +60,10 @@ export default function LobbyManager() {
         return;
       }
 
+      sessionStorage.setItem("jumbolash_player_id", data.id);
+      sessionStorage.setItem("jumbolash_player_room_code", data.roomCode);
+      sessionStorage.setItem("jumbolash_player_name", data.nickname);
+
       // Success - redirect them to the waiting room route
       router.push(`/room/${data.roomCode}`);
     } catch (err) {

@@ -10,7 +10,7 @@ model Room {
   roomCode       String    @id @unique
   gameState      String    @default("LOBBY") // LOBBY, PROMPTING, VOTING, RESULTS
   roundNumber    Int       @default(1)
-  totalRounds    Int       @default(3)       
+  totalRounds    Int       @default(5)       
   timerLimit     Int       @default(90)                
   
   roundStartedAt DateTime? 

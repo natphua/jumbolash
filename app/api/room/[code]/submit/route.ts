@@ -27,10 +27,11 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST(
   req: NextRequest,
-  context: { params: Promise<{ roomCode: string }> },
+  context: { params: Promise<{ code?: string; roomCode?: string }> },
 ) {
   try {
-    const { roomCode } = await context.params;
+    const params = await context.params;
+    const roomCode = (params.code || params.roomCode)?.toUpperCase();
 
     if (!roomCode) {
       return NextResponse.json(
@@ -95,7 +96,9 @@ export async function POST(
 
     const serverNow = Date.now();
     const roundStart = new Date(room.roundStartedAt).getTime();
-    const timerLimitMs = room.timerLimit * 1000;
+    const timerLimitSeconds =
+      room.timerLimit > 1000 ? Math.floor(room.timerLimit / 1000) : room.timerLimit;
+    const timerLimitMs = timerLimitSeconds * 1000;
     const allowedEndTime = roundStart + timerLimitMs;
 
     // Buffer window of 1.5 seconds to account for network latency

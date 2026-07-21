@@ -22,8 +22,10 @@ interface AdminPromptViewProps {
   roomCode: string;
   activePrompt: ActivePrompt | null;
   totalPlayers: number;
-  timerLimit: number; // e.g. 90 seconds
+  timerLimit: number;
   roundStartedAt: string | null;
+  currentRound: number;
+  totalRounds: number;
 }
 
 export default function AdminPromptView({
@@ -32,52 +34,58 @@ export default function AdminPromptView({
   totalPlayers,
   timerLimit,
   roundStartedAt,
+  currentRound,
+  totalRounds,
 }: AdminPromptViewProps) {
+  const timerLimitSeconds =
+    timerLimit > 1000 ? Math.floor(timerLimit / 1000) : timerLimit;
   const [submissionCount, setSubmissionCount] = useState<number>(0);
   const [isCounterPulsing, setIsCounterPulsing] = useState<boolean>(false);
-  const [timeLeft, setTimeLeft] = useState<number>(timerLimit);
+  const [timeLeft, setTimeLeft] = useState<number>(timerLimitSeconds);
 
-  // Synchronized countdown calculation
   useEffect(() => {
     if (!roundStartedAt) return;
 
-    const calculateTimeLeft = () => {
-      const startTime = new Date(roundStartedAt).getTime();
-      const now = Date.now();
-      const elapsedSeconds = Math.floor((now - startTime) / 1000);
-      const remaining = Math.max(0, timerLimit - elapsedSeconds);
-      setTimeLeft(remaining);
+    const calculateRemaining = () => {
+      const start = new Date(roundStartedAt).getTime();
+      const elapsedSeconds = Math.floor((Date.now() - start) / 1000);
+      setTimeLeft(Math.max(0, timerLimitSeconds - elapsedSeconds));
     };
 
-    calculateTimeLeft();
-    const interval = setInterval(calculateTimeLeft, 1000);
+    calculateRemaining();
+    const interval = setInterval(calculateRemaining, 1000);
 
     return () => clearInterval(interval);
-  }, [roundStartedAt, timerLimit]);
+  }, [roundStartedAt, timerLimitSeconds]);
 
-  // Live submission listener
   useEffect(() => {
     if (!roomCode) return;
 
-    const fetchSubmissionCount = async () => {
-      const { count } = await supabase
-        .from("Submission")
+    const fetchResponseCount = async () => {
+      const { count, error } = await supabase
+        .from("Response")
         .select("*", { count: "exact", head: true })
         .eq("roomCode", roomCode);
+
+      if (error) {
+        console.error("Error fetching response count:", error);
+        return;
+      }
 
       setSubmissionCount(count || 0);
     };
 
-    fetchSubmissionCount();
+    fetchResponseCount();
 
-    const submissionChannel = supabase
-      .channel(`realtime-submissions-${roomCode}`)
+    // real-time listener for new responses
+    const responseChannel = supabase
+      .channel(`realtime-responses-${roomCode}`)
       .on(
         "postgres_changes",
         {
           event: "INSERT",
           schema: "public",
-          table: "Submission",
+          table: "Response",
           filter: `roomCode=eq.${roomCode}`,
         },
         () => {
@@ -89,7 +97,7 @@ export default function AdminPromptView({
       .subscribe();
 
     return () => {
-      supabase.removeChannel(submissionChannel);
+      supabase.removeChannel(responseChannel);
     };
   }, [roomCode]);
 
@@ -109,8 +117,8 @@ export default function AdminPromptView({
       <div className="w-full max-w-4xl flex flex-col items-center text-center my-auto space-y-8">
         {/* Active Prompt Card */}
         <div className="game-dashboard-card w-full bg-slate-800 border-4 border-slate-700 p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.5)]">
-          <span className="block font-mono text-xs text-amber-400 tracking-widest uppercase mb-3">
-            CURRENT QUESTION
+          <span className="block font-mono text-md text-amber-400 tracking-widest uppercase mb-3">
+            QUESTION {currentRound} OF {totalRounds}
           </span>
           <h1 className="game-header text-3xl md:text-5xl text-white leading-tight">
             &quot;{activePrompt?.text || "Prepare your answers!"}&quot;
@@ -121,7 +129,7 @@ export default function AdminPromptView({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full">
           {/* Synchronized Timer Card */}
           <div className="game-dashboard-card bg-slate-800 border-2 border-slate-700 px-8 py-6 text-center">
-            <span className="block font-mono text-xs text-slate-400 tracking-wider uppercase mb-1">
+            <span className="block font-mono text-sm text-slate-400 tracking-wider uppercase mb-1">
               TIME REMAINING
             </span>
             <span
@@ -137,18 +145,18 @@ export default function AdminPromptView({
 
           {/* Submissions Live Counter */}
           <div className="game-dashboard-card bg-slate-800 border-2 border-slate-700 px-8 py-6 text-center">
-            <span className="block font-mono text-xs text-slate-400 tracking-wider uppercase mb-1">
+            <span className="block font-mono text-sm text-slate-400 tracking-wider uppercase mb-1">
               ANSWERS RECEIVED
             </span>
             <div className="flex items-center justify-center gap-2">
               <span
-                className={`text-5xl font-mono font-black text-emerald-400 transition-transform duration-300 ${
+                className={`text-3xl font-mono font-black text-emerald-400 transition-transform duration-300 ${
                   isCounterPulsing ? "scale-125 text-amber-300" : "scale-100"
                 }`}
               >
                 {submissionCount}
               </span>
-              <span className="text-2xl font-mono text-slate-500">
+              <span className="text-3xl font-mono text-slate-500">
                 / {totalPlayers}
               </span>
             </div>

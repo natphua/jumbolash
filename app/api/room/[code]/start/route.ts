@@ -82,7 +82,7 @@ export async function POST(
         gameState: "PROMPTING",
         activePromptId: randomPrompt.id,
         roundStartedAt: new Date(),
-        roundNumber: (room.roundNumber || 0) + 1,
+        roundNumber: room.roundNumber || 1,
       },
     });
 
@@ -91,6 +91,8 @@ export async function POST(
         message: "Game state successfully updated to PROMPTING.",
         roomCode: updatedRoom.roomCode,
         activePromptId: randomPrompt.id,
+        roundNumber: updatedRoom.roundNumber,
+        roundStartedAt: updatedRoom.roundStartedAt,
       },
       { status: 200 },
     );

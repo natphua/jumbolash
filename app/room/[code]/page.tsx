@@ -38,16 +38,9 @@ export default function RoomPage() {
   const roomCode = (params?.code as string)?.toUpperCase();
 
   const [roomData, setRoomData] = useState<RoomData | null>(null);
+  const [playerId, setPlayerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const playerId =
-    typeof window !== "undefined"
-      ? (document.cookie
-          .split("; ")
-          .find((row) => row.startsWith("player_id="))
-          ?.split("=")[1] ?? null)
-      : null;
 
   // Effect 1: Handles initial data loading
   useEffect(() => {
@@ -56,6 +49,22 @@ export default function RoomPage() {
     async function loadRoomData() {
       if (!roomCode) return;
       try {
+        const sessionPlayerId = sessionStorage.getItem("jumbolash_player_id");
+        const sessionRoomCode = sessionStorage.getItem(
+          "jumbolash_player_room_code",
+        );
+        const cookiePlayerId =
+          document.cookie
+            .split("; ")
+            .find((row) => row.startsWith("player_id="))
+            ?.split("=")[1] ?? null;
+
+        setPlayerId(
+          sessionRoomCode === roomCode && sessionPlayerId
+            ? sessionPlayerId
+            : cookiePlayerId,
+        );
+
         const response = await fetch(`/api/room?code=${roomCode}`);
         const data = await response.json();
 
@@ -167,6 +176,9 @@ export default function RoomPage() {
 
       document.cookie = "player_id=; path=/; Max-Age=0;";
       document.cookie = "player_nickname=; path=/; Max-Age=0;";
+      sessionStorage.removeItem("jumbolash_player_id");
+      sessionStorage.removeItem("jumbolash_player_room_code");
+      sessionStorage.removeItem("jumbolash_player_name");
 
       router.push("/");
     } catch (err) {

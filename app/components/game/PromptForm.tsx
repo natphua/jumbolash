@@ -28,8 +28,10 @@ export default function PromptForm({
   roundStartedAt,
   playerId,
 }: PromptFormProps) {
+  const timerLimitSeconds =
+    timerLimit > 1000 ? Math.floor(timerLimit / 1000) : timerLimit;
   const [answer, setAnswer] = useState("");
-  const [timeLeft, setTimeLeft] = useState<number>(timerLimit);
+  const [timeLeft, setTimeLeft] = useState<number>(timerLimitSeconds);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -41,7 +43,7 @@ export default function PromptForm({
     const calculateRemaining = () => {
       const start = new Date(roundStartedAt).getTime();
       const elapsedSeconds = Math.floor((Date.now() - start) / 1000);
-      const remaining = Math.max(0, timerLimit - elapsedSeconds);
+      const remaining = Math.max(0, timerLimitSeconds - elapsedSeconds);
       setTimeLeft(remaining);
     };
 
@@ -49,7 +51,7 @@ export default function PromptForm({
     const interval = setInterval(calculateRemaining, 1000);
 
     return () => clearInterval(interval);
-  }, [roundStartedAt, timerLimit]);
+  }, [roundStartedAt, timerLimitSeconds]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

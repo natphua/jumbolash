@@ -27,6 +27,10 @@ interface ActivePrompt {
   text: string;
 }
 
+function normalizeTimerLimitSeconds(timerLimit: number) {
+  return timerLimit > 1000 ? Math.floor(timerLimit / 1000) : timerLimit;
+}
+
 export default function AdminDashboard() {
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -39,6 +43,7 @@ export default function AdminDashboard() {
   const [roundStartedAt, setRoundStartedAt] = useState<string | null>(null);
 
   const [rounds, setRounds] = useState<string>("3");
+  const [currentRound, setCurrentRound] = useState<number>(1);
   const [timer, setTimer] = useState<string>("90");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -70,7 +75,7 @@ export default function AdminDashboard() {
         supabase
           .from("Room")
           .select(
-            "totalRounds, timerLimit, status, roundStartedAt, activePrompt:Prompt(id, text)",
+            "totalRounds, roundNumber, timerLimit, gameState, roundStartedAt, activePromptId",
           )
           .eq("roomCode", code)
           .single(),
@@ -81,10 +86,26 @@ export default function AdminDashboard() {
 
       if (roomRes.data) {
         setRounds(String(roomRes.data.totalRounds));
-        setTimer(String(roomRes.data.timerLimit));
-        setGameState(roomRes.data.status);
+        if (roomRes.data.roundNumber) {
+          setCurrentRound(roomRes.data.roundNumber);
+        }
+        setTimer(String(normalizeTimerLimitSeconds(roomRes.data.timerLimit)));
+        setGameState(roomRes.data.gameState);
         setRoundStartedAt(roomRes.data.roundStartedAt);
-        setActivePrompt(roomRes.data.activePrompt as unknown as ActivePrompt);
+
+        if (roomRes.data.activePromptId) {
+          const { data: promptData, error } = await supabase
+            .from("Prompt")
+            .select("id, text")
+            .eq("id", roomRes.data.activePromptId)
+            .single();
+
+          if (promptData) {
+            setActivePrompt(promptData);
+          } else if (error) {
+            console.error("Failed to fetch active prompt text:", error);
+          }
+        }
       }
       if (playersRes.data) {
         setPlayers(playersRes.data);
@@ -138,11 +159,12 @@ export default function AdminDashboard() {
         },
         async (payload) => {
           const updated = payload.new;
-          setGameState(updated.status);
+          setGameState(updated.gameState);
           setRoundStartedAt(updated.roundStartedAt);
+          setCurrentRound(updated.roundNumber);
 
           // If transitioning to PROMPTING, fetch the active prompt details
-          if (updated.status === "PROMPTING" && updated.activePromptId) {
+          if (updated.gameState === "PROMPTING" && updated.activePromptId) {
             const { data } = await supabase
               .from("Prompt")
               .select("id, text")
@@ -237,11 +259,26 @@ export default function AdminDashboard() {
         alert(data.error || "Failed to start match.");
       }
 
-      if (data.room) {
-        setGameState(data.room.status); // "PROMPTING"
-        setRoundStartedAt(data.room.roundStartedAt);
-        setActivePrompt(data.room.activePrompt);
+      // 1. Fetch the actual prompt text using the UUID returned from the API
+      if (data.activePromptId) {
+        const { data: promptData, error } = await supabase
+          .from("Prompt")
+          .select("id, text")
+          .eq("id", data.activePromptId)
+          .single();
+
+        if (promptData) {
+          setActivePrompt(promptData);
+        } else if (error) {
+          console.error("Failed to fetch active prompt text:", error);
+        }
       }
+
+      // 2. Fallback for start time if not returned explicitly by API
+      setRoundStartedAt(data.roundStartedAt || new Date().toISOString());
+
+      // 3. Update game state to switch the view
+      setGameState("PROMPTING");
     } catch (err) {
       console.error("Failed to start game:", err);
       alert("Network error starting match.");
@@ -292,6 +329,8 @@ export default function AdminDashboard() {
         totalPlayers={players.length}
         timerLimit={parseInt(timer, 10) || 90}
         roundStartedAt={roundStartedAt}
+        currentRound={currentRound}
+        totalRounds={parseInt(rounds, 10) || 5}
       />
     );
   }
