@@ -89,7 +89,7 @@ export default function LobbyManager() {
       {view === "join" && (
         <form onSubmit={handlePlayerJoin} className="space-y-4">
           <h2 className="game-header text-center text-xl mb-2">
-            Enter the Arena
+            Join the Game
           </h2>
           <input
             type="text"

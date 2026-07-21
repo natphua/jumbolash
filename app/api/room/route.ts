@@ -2,7 +2,8 @@
  * route.ts (api/room)
  *
  * Core room management API endpoint. Handles administrative room initialization
- * via POST, and handles incoming player lobby connections via PUT.
+ * via POST, incoming player lobby connections via PUT, and room profile
+ * retrieval via GET.
  *
  * Created on 2026-07-15 by Natalie Phua.
  */

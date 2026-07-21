@@ -2,7 +2,7 @@
  * page.tsx (admin/dashboard)
  *
  * Handles admin live sockets, game configuration updates, and real-time roster
- * syncrhonization via Supabase. Provides a single-page interface for game
+ * synchronization via Supabase. Provides a single-page interface for game
  * hosting and management.
  *
  * Created on 2026-07-15 by Natalie Phua.
@@ -15,24 +15,37 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import RoomSettingsPanel from "../../components/admin/RoomSettingsPanel";
 import AdminRosterPanel from "../../components/admin/AdminRosterPanel";
+import AdminPromptView from "../../components/admin/AdminPromptView";
 
 interface Player {
   id: string;
   nickname: string;
 }
 
+interface ActivePrompt {
+  id: string;
+  text: string;
+}
+
 export default function AdminDashboard() {
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  const isNotEnoughPlayers = players.length < 2;
   const [loading, setLoading] = useState(true);
+
+  // Room state for phase shifts
+  const [gameState, setGameState] = useState<string>("LOBBY");
+  const [activePrompt, setActivePrompt] = useState<ActivePrompt | null>(null);
+  const [roundStartedAt, setRoundStartedAt] = useState<string | null>(null);
 
   const [rounds, setRounds] = useState<string>("3");
   const [timer, setTimer] = useState<string>("90");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [startingGame, setStartingGame] = useState(false);
   const router = useRouter();
 
-  // Effect 1: Fetches the room code and initial player roster on mount
+  // Effect 1: Fetches the room code, initial room details, and player roster on mount
   useEffect(() => {
     let isActive = true;
 
@@ -56,7 +69,9 @@ export default function AdminDashboard() {
       const [roomRes, playersRes] = await Promise.all([
         supabase
           .from("Room")
-          .select("totalRounds, timerLimit")
+          .select(
+            "totalRounds, timerLimit, status, roundStartedAt, activePrompt:Prompt(id, text)",
+          )
           .eq("roomCode", code)
           .single(),
         supabase.from("Player").select("id, nickname").eq("roomCode", code),
@@ -67,6 +82,9 @@ export default function AdminDashboard() {
       if (roomRes.data) {
         setRounds(String(roomRes.data.totalRounds));
         setTimer(String(roomRes.data.timerLimit));
+        setGameState(roomRes.data.status);
+        setRoundStartedAt(roomRes.data.roundStartedAt);
+        setActivePrompt(roomRes.data.activePrompt as unknown as ActivePrompt);
       }
       if (playersRes.data) {
         setPlayers(playersRes.data);
@@ -81,11 +99,13 @@ export default function AdminDashboard() {
     };
   }, [router]);
 
-  // Effect 2: Sets up supabase real-time subscription for player roster changes
+  // Effect 2: Sets up Supabase real-time subscriptions for Player roster and
+  // Room updates
   useEffect(() => {
     if (!roomCode) return;
 
-    const channel = supabase
+    // Roster Channel
+    const playerChannel = supabase
       .channel(`realtime-players-${roomCode}`)
       .on(
         "postgres_changes",
@@ -105,8 +125,39 @@ export default function AdminDashboard() {
       )
       .subscribe();
 
+    // Room Status Channel (for transition to PROMPTING, VOTING, etc.)
+    const roomChannel = supabase
+      .channel(`realtime-room-${roomCode}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "Room",
+          filter: `roomCode=eq.${roomCode}`,
+        },
+        async (payload) => {
+          const updated = payload.new;
+          setGameState(updated.status);
+          setRoundStartedAt(updated.roundStartedAt);
+
+          // If transitioning to PROMPTING, fetch the active prompt details
+          if (updated.status === "PROMPTING" && updated.activePromptId) {
+            const { data } = await supabase
+              .from("Prompt")
+              .select("id, text")
+              .eq("id", updated.activePromptId)
+              .single();
+
+            if (data) setActivePrompt(data);
+          }
+        },
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(playerChannel);
+      supabase.removeChannel(roomChannel);
     };
   }, [roomCode]);
 
@@ -171,6 +222,34 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleStartGame = async () => {
+    if (!roomCode || startingGame) return;
+
+    setStartingGame(true);
+    try {
+      const res = await fetch(`/api/room/${roomCode}/start`, {
+        method: "POST",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || "Failed to start match.");
+      }
+
+      if (data.room) {
+        setGameState(data.room.status); // "PROMPTING"
+        setRoundStartedAt(data.room.roundStartedAt);
+        setActivePrompt(data.room.activePrompt);
+      }
+    } catch (err) {
+      console.error("Failed to start game:", err);
+      alert("Network error starting match.");
+    } finally {
+      setStartingGame(false);
+    }
+  };
+
   const handleEndRoom = async () => {
     if (!roomCode) return;
 
@@ -204,6 +283,20 @@ export default function AdminDashboard() {
     );
   }
 
+  // Active Prompting Phase View for Admin
+  if (gameState === "PROMPTING" && roomCode) {
+    return (
+      <AdminPromptView
+        roomCode={roomCode}
+        activePrompt={activePrompt}
+        totalPlayers={players.length}
+        timerLimit={parseInt(timer, 10) || 90}
+        roundStartedAt={roundStartedAt}
+      />
+    );
+  }
+
+  // Default Host Lobby View
   return (
     <main className="min-h-screen p-8 bg-slate-900 text-slate-800 font-sans flex flex-col items-center justify-start relative">
       <div className="w-full max-w-6xl flex justify-start mb-4 mt-2">
@@ -229,6 +322,26 @@ export default function AdminDashboard() {
         />
 
         <AdminRosterPanel players={players} />
+      </div>
+
+      <div className="w-full max-w-6xl mt-8 text-center">
+        <button
+          onClick={handleStartGame}
+          disabled={startingGame || isNotEnoughPlayers}
+          className={`game-box-jagged w-full py-4 text-xl text-white transition-colors ${
+            startingGame || isNotEnoughPlayers
+              ? "bg-slate-700 text-slate-400 cursor-not-allowed opacity-80"
+              : "bg-logo-green cursor-pointer hover:brightness-110"
+          }`}
+        >
+          {startingGame ? "LAUNCHING ROUND..." : "LAUNCH MATCH"}
+        </button>
+
+        {isNotEnoughPlayers && (
+          <p className="mt-3 font-mono text-xs tracking-wider text-amber-400 uppercase">
+            2+ players must join before the game can begin.
+          </p>
+        )}
       </div>
     </main>
   );
