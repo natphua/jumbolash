@@ -57,9 +57,9 @@ export async function POST(
 
     if (playersError) throw playersError;
 
-    if ((players || []).length < 2) {
+    if ((players || []).length < 3) {
       return NextResponse.json(
-        { error: "At least 2 players are required to start the match." },
+        { error: "At least 3 players are required to start the match." },
         { status: 400 },
       );
     }

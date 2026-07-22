@@ -13,7 +13,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/supabase/client";
-import { GameState } from "@/lib/game-state";
+import { GameState, normalizeTimerLimitSeconds } from "@/lib/game-state";
 import RoomSettingsPanel from "../../components/admin/RoomSettingsPanel";
 import AdminRosterPanel from "../../components/admin/AdminRosterPanel";
 import AdminPromptView from "../../components/admin/AdminPromptView";
@@ -53,14 +53,19 @@ interface CurrentMatchup {
   submittedVoteCount: number;
 }
 
-function normalizeTimerLimitSeconds(timerLimit: number) {
-  return timerLimit > 1000 ? Math.floor(timerLimit / 1000) : timerLimit;
+function getPresentPlayerIds(presenceState: Record<string, unknown[]>) {
+  return new Set(
+    Object.values(presenceState)
+      .flat()
+      .map((presence) => (presence as { playerId?: string }).playerId)
+      .filter((playerId): playerId is string => Boolean(playerId)),
+  );
 }
 
 export default function AdminDashboard() {
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
-  const isNotEnoughPlayers = players.length < 2;
+  const isNotEnoughPlayers = players.length < 3;
   const [loading, setLoading] = useState(true);
 
   // Room state for phase shifts
@@ -72,6 +77,10 @@ export default function AdminDashboard() {
   );
   const [votingStartedAt, setVotingStartedAt] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<Player[]>([]);
+  const [connectedPlayerIds, setConnectedPlayerIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [presenceReady, setPresenceReady] = useState(false);
 
   const [rounds, setRounds] = useState<string>("3");
   const [currentRound, setCurrentRound] = useState<number>(1);
@@ -238,6 +247,24 @@ export default function AdminDashboard() {
     };
   }, [roomCode]);
 
+  useEffect(() => {
+    if (!roomCode) return;
+
+    const presenceChannel = supabase
+      .channel(`room-presence:${roomCode}`)
+      .on("presence", { event: "sync" }, () => {
+        setConnectedPlayerIds(
+          getPresentPlayerIds(presenceChannel.presenceState()),
+        );
+        setPresenceReady(true);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(presenceChannel);
+    };
+  }, [roomCode]);
+
   const handleRoundsChange = (val: string) => {
     if (val === "") {
       setRounds("0");
@@ -361,6 +388,37 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleKickPlayer = async (player: Player) => {
+    if (!roomCode) return;
+
+    const confirmKick = confirm(
+      "Are you sure you want to disconnect this player from your room?",
+    );
+    if (!confirmKick) return;
+
+    try {
+      const response = await fetch(
+        `/api/room?code=${roomCode}&playerId=${player.id}`,
+        { method: "DELETE" },
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to disconnect player.");
+      }
+
+      setPlayers((prev) => prev.filter((p) => p.id !== player.id));
+      setConnectedPlayerIds((prev) => {
+        const next = new Set(prev);
+        next.delete(player.id);
+        return next;
+      });
+    } catch (err) {
+      console.error("Failed to disconnect player:", err);
+      alert("Failed to disconnect player.");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-900 font-mono text-slate-400">
@@ -397,7 +455,9 @@ export default function AdminDashboard() {
   }
 
   if (gameState === GameState.Results) {
-    return <LeaderboardView players={leaderboard.length ? leaderboard : players} />;
+    return (
+      <LeaderboardView players={leaderboard.length ? leaderboard : players} />
+    );
   }
 
   // Default Host Lobby View
@@ -425,7 +485,12 @@ export default function AdminDashboard() {
           onCopyRoomCode={copyRoomCode}
         />
 
-        <AdminRosterPanel players={players} />
+        <AdminRosterPanel
+          players={players}
+          connectedPlayerIds={connectedPlayerIds}
+          presenceReady={presenceReady}
+          onKickPlayer={handleKickPlayer}
+        />
       </div>
 
       <div className="w-full max-w-6xl mt-8 text-center">
@@ -443,7 +508,7 @@ export default function AdminDashboard() {
 
         {isNotEnoughPlayers && (
           <p className="mt-3 font-mono text-xs tracking-wider text-amber-400 uppercase">
-            2+ players must join before the game can begin.
+            At least 3 players must join before the game can begin.
           </p>
         )}
       </div>

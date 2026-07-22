@@ -18,6 +18,8 @@ test.describe("Prompting Round Flow", () => {
   let playerOnePage: Page;
   let playerTwoContext: BrowserContext;
   let playerTwoPage: Page;
+  let playerThreeContext: BrowserContext;
+  let playerThreePage: Page;
 
   test.beforeEach(async ({ browser }) => {
     adminContext = await browser.newContext();
@@ -28,12 +30,16 @@ test.describe("Prompting Round Flow", () => {
 
     playerTwoContext = await browser.newContext();
     playerTwoPage = await playerTwoContext.newPage();
+
+    playerThreeContext = await browser.newContext();
+    playerThreePage = await playerThreeContext.newPage();
   });
 
   test.afterEach(async () => {
     await adminContext.close();
     await playerOneContext.close();
     await playerTwoContext.close();
+    await playerThreeContext.close();
   });
 
   test("PR-1: player can submit an answer after admin launches a prompt", async () => {
@@ -59,6 +65,7 @@ test.describe("Prompting Round Flow", () => {
 
       await joinRoom(playerOnePage, roomCode, "PromptPlayerOne");
       await joinRoom(playerTwoPage, roomCode, "PromptPlayerTwo");
+      await joinRoom(playerThreePage, roomCode, "PromptPlayer3");
 
       const playerCookies = await playerOneContext.cookies();
       playerId =
@@ -70,6 +77,7 @@ test.describe("Prompting Round Flow", () => {
         timeout: 7000,
       });
       await expect(adminPage.locator("text=PromptPlayerTwo")).toBeVisible();
+      await expect(adminPage.locator("text=PromptPlayer3")).toBeVisible();
 
       await adminPage.click("button:has-text('LAUNCH MATCH')");
 
@@ -118,6 +126,7 @@ test.describe("Prompting Round Flow", () => {
     const sharedPlayerContext = await browser.newContext();
     const sameBrowserPlayerOne = await sharedPlayerContext.newPage();
     const sameBrowserPlayerTwo = await sharedPlayerContext.newPage();
+    const sameBrowserPlayerThree = await sharedPlayerContext.newPage();
 
     let roomCode = "";
 
@@ -136,11 +145,13 @@ test.describe("Prompting Round Flow", () => {
 
       await joinRoom(sameBrowserPlayerOne, roomCode, "SameTabOne");
       await joinRoom(sameBrowserPlayerTwo, roomCode, "SameTabTwo");
+      await joinRoom(sameBrowserPlayerThree, roomCode, "SameTabThree");
 
       await expect(adminPage.locator("text=SameTabOne")).toBeVisible({
         timeout: 7000,
       });
       await expect(adminPage.locator("text=SameTabTwo")).toBeVisible();
+      await expect(adminPage.locator("text=SameTabThree")).toBeVisible();
 
       await adminPage.click("button:has-text('LAUNCH MATCH')");
 

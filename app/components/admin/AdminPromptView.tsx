@@ -12,6 +12,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/supabase/client";
+import { normalizeTimerLimitSeconds } from "@/lib/game-state";
 
 interface ActivePrompt {
   id: string;
@@ -37,13 +38,16 @@ export default function AdminPromptView({
   currentRound,
   totalRounds,
 }: AdminPromptViewProps) {
-  const timerLimitSeconds =
-    timerLimit > 1000 ? Math.floor(timerLimit / 1000) : timerLimit;
+  const timerLimitSeconds = normalizeTimerLimitSeconds(timerLimit);
   const [submissionCount, setSubmissionCount] = useState<number>(0);
   const [isCounterPulsing, setIsCounterPulsing] = useState<boolean>(false);
   const [timeLeft, setTimeLeft] = useState<number>(timerLimitSeconds);
   const displayedTimeLeft = roundStartedAt ? timeLeft : timerLimitSeconds;
   const hasTransitionedRef = useRef(false);
+
+  useEffect(() => {
+    hasTransitionedRef.current = false;
+  }, [roomCode, activePrompt?.id]);
 
   useEffect(() => {
     if (!roundStartedAt) return;
@@ -61,16 +65,25 @@ export default function AdminPromptView({
   }, [roundStartedAt, timerLimitSeconds]);
 
   useEffect(() => {
-    if (displayedTimeLeft > 0 || hasTransitionedRef.current) return;
+    const everyoneSubmitted = totalPlayers > 0 && submissionCount >= totalPlayers;
+    const timerExpired = displayedTimeLeft <= 0;
+
+    if ((!timerExpired && !everyoneSubmitted) || hasTransitionedRef.current) {
+      return;
+    }
 
     hasTransitionedRef.current = true;
-    fetch(`/api/room/${roomCode}/transition`, { method: "POST" }).catch(
-      (err) => {
+    fetch(`/api/room/${roomCode}/transition`, { method: "POST" })
+      .then((response) => {
+        if (!response.ok) {
+          hasTransitionedRef.current = false;
+        }
+      })
+      .catch((err) => {
         console.error("Failed to transition to voting:", err);
         hasTransitionedRef.current = false;
-      },
-    );
-  }, [displayedTimeLeft, roomCode]);
+      });
+  }, [displayedTimeLeft, roomCode, submissionCount, totalPlayers]);
 
   useEffect(() => {
     if (!roomCode) return;

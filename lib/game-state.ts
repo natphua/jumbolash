@@ -31,5 +31,11 @@ export const VOTING_SECONDS = 20;
 export const POINTS_PER_VOTE = 100;
 
 export function normalizeTimerLimitSeconds(timerLimit: number) {
-  return timerLimit > 1000 ? Math.floor(timerLimit / 1000) : timerLimit;
+  let normalized = timerLimit;
+
+  while (normalized > 120 && normalized >= 1000) {
+    normalized = Math.floor(normalized / 1000);
+  }
+
+  return normalized;
 }

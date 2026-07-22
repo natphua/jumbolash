@@ -35,9 +35,15 @@ interface ResponseRecord {
   votes: number;
 }
 
+interface RoomRecord {
+  roundNumber: number;
+  totalRounds: number;
+  usedPromptIds: string[];
+}
+
 async function advanceMatchup(
   roomCode: string,
-  roundNumber: number,
+  room: RoomRecord,
   matchupIndex: number,
 ) {
   const nextIndex = matchupIndex + 1;
@@ -45,7 +51,7 @@ async function advanceMatchup(
     .from("Matchup")
     .select("id")
     .eq("roomCode", roomCode)
-    .eq("roundNumber", roundNumber)
+    .eq("roundNumber", room.roundNumber)
     .eq("matchupIndex", nextIndex)
     .maybeSingle();
 
@@ -55,12 +61,48 @@ async function advanceMatchup(
     .from("Matchup")
     .update({ status: MatchupStatus.Complete })
     .eq("roomCode", roomCode)
-    .eq("roundNumber", roundNumber)
+    .eq("roundNumber", room.roundNumber)
     .eq("matchupIndex", matchupIndex);
 
   if (completeError) throw completeError;
 
   if (!nextMatchup) {
+    if (room.roundNumber < room.totalRounds) {
+      const { data: prompts, error: promptsError } = await supabaseAdmin
+        .from("Prompt")
+        .select("id, text");
+
+      if (promptsError) throw promptsError;
+
+      const usedPromptIds = room.usedPromptIds || [];
+      const usedPromptSet = new Set(usedPromptIds);
+      const availablePrompts = (prompts || []).filter(
+        (prompt) => !usedPromptSet.has(prompt.id),
+      );
+
+      if (availablePrompts.length > 0) {
+        const nextPrompt =
+          availablePrompts[Math.floor(Math.random() * availablePrompts.length)];
+
+        const { error } = await supabaseAdmin
+          .from("Room")
+          .update({
+            gameState: GameState.Prompting,
+            roundNumber: room.roundNumber + 1,
+            activePromptId: nextPrompt.id,
+            roundStartedAt: new Date().toISOString(),
+            activeMatchupIndex: 0,
+            votingStartedAt: null,
+            revealStartedAt: null,
+            usedPromptIds: [...usedPromptIds, nextPrompt.id],
+          })
+          .eq("roomCode", roomCode);
+
+        if (error) throw error;
+        return GameState.Prompting;
+      }
+    }
+
     const { error } = await supabaseAdmin
       .from("Room")
       .update({
@@ -278,7 +320,7 @@ export async function POST(
     if ((currentVotes || []).length >= eligibleVoteCount) {
       gameState = await advanceMatchup(
         roomCode,
-        matchup.roundNumber,
+        room,
         matchup.matchupIndex,
       );
     }

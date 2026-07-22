@@ -10,6 +10,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { normalizeTimerLimitSeconds } from "@/lib/game-state";
 
 interface PromptFormProps {
   roomCode: string;
@@ -28,8 +29,7 @@ export default function PromptForm({
   roundStartedAt,
   playerId,
 }: PromptFormProps) {
-  const timerLimitSeconds =
-    timerLimit > 1000 ? Math.floor(timerLimit / 1000) : timerLimit;
+  const timerLimitSeconds = normalizeTimerLimitSeconds(timerLimit);
   const [answer, setAnswer] = useState("");
   const [timeLeft, setTimeLeft] = useState<number>(timerLimitSeconds);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -59,12 +59,16 @@ export default function PromptForm({
     if (displayedTimeLeft > 0 || hasTransitionedRef.current) return;
 
     hasTransitionedRef.current = true;
-    fetch(`/api/room/${roomCode}/transition`, { method: "POST" }).catch(
-      (err) => {
+    fetch(`/api/room/${roomCode}/transition`, { method: "POST" })
+      .then((response) => {
+        if (!response.ok) {
+          hasTransitionedRef.current = false;
+        }
+      })
+      .catch((err) => {
         console.error("Failed to transition to voting:", err);
         hasTransitionedRef.current = false;
-      },
-    );
+      });
   }, [displayedTimeLeft, roomCode]);
 
   const handleSubmit = async (e: React.FormEvent) => {

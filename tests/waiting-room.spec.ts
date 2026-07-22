@@ -1,8 +1,8 @@
 /**
  * waiting-room.spec.ts
  *
- * End-to-end tests for the waiting room and real-time synchronization of the game lobby.
- * Tests include:
+ * End-to-end tests for the waiting room and real-time synchronization of the 
+ * game lobby. Tests include:
  * - 10-player cap limit enforcement
  * - Real-time roster synchronization between admin and player views
  * - Player leaving the room and admin ending the session

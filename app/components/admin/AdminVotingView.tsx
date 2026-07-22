@@ -48,6 +48,10 @@ export default function AdminVotingView({
   const hasTransitionedRef = useRef(false);
 
   useEffect(() => {
+    hasTransitionedRef.current = false;
+  }, [currentMatchup?.id]);
+
+  useEffect(() => {
     if (!votingStartedAt) return;
 
     const calculateRemaining = () => {
@@ -66,12 +70,16 @@ export default function AdminVotingView({
     if (timeLeft > 0 || hasTransitionedRef.current) return;
 
     hasTransitionedRef.current = true;
-    fetch(`/api/room/${roomCode}/transition`, { method: "POST" }).catch(
-      (err) => {
+    fetch(`/api/room/${roomCode}/transition`, { method: "POST" })
+      .then((response) => {
+        if (!response.ok) {
+          hasTransitionedRef.current = false;
+        }
+      })
+      .catch((err) => {
         console.error("Failed to advance voting matchup:", err);
         hasTransitionedRef.current = false;
-      },
-    );
+      });
   }, [roomCode, timeLeft]);
 
   if (!currentMatchup) {
