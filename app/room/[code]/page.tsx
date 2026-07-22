@@ -1,9 +1,8 @@
 /**
  * page.tsx (app/room/[code])
  *
- * Client-side player waiting room view. Sets up a real-time Postgres subscription
- * via Supabase to track player roster changes and automatically handles game
- * state routing once the administrator launches the session.
+ * Client-side player room view. Dynamically switches between the waiting lobby
+ * roster view and the active prompt form.
  *
  * Created on 2026-07-17 by Natalie Phua.
  */
@@ -12,7 +11,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/supabase/client";
+import PromptForm from "../../components/game/PromptForm";
 
 interface Player {
   id: string;
@@ -23,37 +23,62 @@ interface Player {
 interface RoomData {
   roomCode: string;
   gameState: string;
+  timerLimit: number;
+  roundStartedAt: string | null;
+  activePrompt?: {
+    id: string;
+    text: string;
+  } | null;
   players: Player[];
 }
 
-export default function WaitingRoomPage() {
+async function fetchRoomData(roomCode: string) {
+  const response = await fetch(`/api/room?code=${roomCode}`);
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Failed to load room data.");
+  }
+
+  return data as RoomData;
+}
+
+export default function RoomPage() {
   const params = useParams();
   const router = useRouter();
   const roomCode = (params?.code as string)?.toUpperCase();
 
   const [roomData, setRoomData] = useState<RoomData | null>(null);
+  const [playerId, setPlayerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Effect 1: Handles the initial data loading on mount
+  // Effect 1: Handles initial data loading
   useEffect(() => {
     let isMounted = true;
 
-    async function loadInitialLobbyData() {
+    async function loadRoomData() {
       if (!roomCode) return;
       try {
-        const response = await fetch(`/api/room?code=${roomCode}`);
-        const data = await response.json();
+        const sessionPlayerId = sessionStorage.getItem("jumbolash_player_id");
+        const sessionRoomCode = sessionStorage.getItem(
+          "jumbolash_player_room_code",
+        );
+        const cookiePlayerId =
+          document.cookie
+            .split("; ")
+            .find((row) => row.startsWith("player_id="))
+            ?.split("=")[1] ?? null;
 
-        if (!response.ok)
-          throw new Error(data.error || "Failed to load lobby data.");
+        setPlayerId(
+          sessionRoomCode === roomCode && sessionPlayerId
+            ? sessionPlayerId
+            : cookiePlayerId,
+        );
+
+        const data = await fetchRoomData(roomCode);
 
         if (!isMounted) return;
-
-        if (data.gameState === "PROMPTING") {
-          router.push(`/game/${roomCode}`);
-          return;
-        }
 
         setRoomData(data);
         setLoading(false);
@@ -69,20 +94,20 @@ export default function WaitingRoomPage() {
       }
     }
 
-    loadInitialLobbyData();
+    loadRoomData();
 
     return () => {
       isMounted = false;
     };
-  }, [roomCode, router]); // Clean dependencies, no function references needed
+  }, [roomCode]);
 
-  // Effect 2: Manage external live socket subscriptions exclusively
+  // Effect 2: Realtime WebSocket Subscription for State Updates & Roster Changes
   useEffect(() => {
     if (!roomCode) return;
 
     const channel = supabase
       .channel(`room_lobby:${roomCode}`)
-      // Listener A: Watch for game state changes from the host
+      // Listener A: Watch for game state and active prompt updates from host
       .on(
         "postgres_changes",
         {
@@ -91,14 +116,17 @@ export default function WaitingRoomPage() {
           table: "Room",
           filter: `roomCode=eq.${roomCode}`,
         },
-        (payload) => {
-          const updatedRoom = payload.new as { gameState: string };
-          if (updatedRoom && updatedRoom.gameState === "PROMPTING") {
-            router.push(`/game/${roomCode}`);
+        async () => {
+          try {
+            // Re-fetch room data to get populated active prompt relation
+            const data = await fetchRoomData(roomCode);
+            setRoomData(data);
+          } catch (err) {
+            console.error("Failed to refresh room state:", err);
           }
         },
       )
-      // Listener A.2: Watch for room closure/deletion from the host
+      // Listener A.2: Host deleted room
       .on(
         "postgres_changes",
         {
@@ -109,14 +137,12 @@ export default function WaitingRoomPage() {
         },
         () => {
           alert("Host has closed this room");
-
-          // Clear player tracking cookie if your application assigns one here
           document.cookie = "player_nickname=; path=/; Max-Age=0;";
-
+          document.cookie = "player_id=; path=/; Max-Age=0;";
           router.replace("/");
         },
       )
-      // Listener B: Watch for roster changes (players joining or dropping out)
+      // Listener B: Watch roster changes
       .on(
         "postgres_changes",
         {
@@ -126,17 +152,27 @@ export default function WaitingRoomPage() {
           filter: `roomCode=eq.${roomCode}`,
         },
         async () => {
-          // Pull a fresh snapshot of the room and players from the API route
-          const response = await fetch(`/api/room?code=${roomCode}`);
-          const data = await response.json();
-          if (response.ok) {
+          try {
+            const data = await fetchRoomData(roomCode);
             setRoomData(data);
+          } catch (err) {
+            console.error("Failed to refresh roster state:", err);
           }
         },
       )
       .subscribe();
 
+    const fallbackRefresh = window.setInterval(async () => {
+      try {
+        const data = await fetchRoomData(roomCode);
+        setRoomData(data);
+      } catch (err) {
+        console.error("Failed to poll room state:", err);
+      }
+    }, 1500);
+
     return () => {
+      window.clearInterval(fallbackRefresh);
       supabase.removeChannel(channel);
     };
   }, [roomCode, router]);
@@ -148,23 +184,25 @@ export default function WaitingRoomPage() {
     if (!confirmLeave) return;
 
     try {
-      const cookies = document.cookie.split("; ");
-      const idCookie = cookies.find((row) => row.startsWith("player_id="));
-      const playerId = idCookie ? idCookie.split("=")[1] : null;
-
       if (playerId) {
-        // Remove individual identity row from database
-        const { error } = await supabase
-          .from("Player")
-          .delete()
-          .eq("id", playerId);
+        const response = await fetch(
+          `/api/room?code=${roomCode}&playerId=${playerId}`,
+          {
+            method: "DELETE",
+          },
+        );
+        const data = await response.json();
 
-        if (error) throw error;
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to leave room.");
+        }
       }
 
-      // Evaporate local client storage cookies
       document.cookie = "player_id=; path=/; Max-Age=0;";
       document.cookie = "player_nickname=; path=/; Max-Age=0;";
+      sessionStorage.removeItem("jumbolash_player_id");
+      sessionStorage.removeItem("jumbolash_player_room_code");
+      sessionStorage.removeItem("jumbolash_player_name");
 
       router.push("/");
     } catch (err) {
@@ -176,7 +214,7 @@ export default function WaitingRoomPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-900 font-mono text-slate-400">
         <p className="animate-pulse uppercase tracking-widest">
-          SYNCING WITH LOBBY ARENA...
+          SYNCING WITH LOBBY...
         </p>
       </div>
     );
@@ -186,7 +224,7 @@ export default function WaitingRoomPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-900 p-4">
         <div className="w-full max-w-md game-dashboard-card text-center space-y-4">
-          <p className="error-text">{error || "LOBBY COULD NOT BE LOADED."}</p>
+          <p className="error-text">{error || "ROOM COULD NOT BE LOADED."}</p>
           <button
             onClick={() => router.push("/")}
             className="copy-btn py-2 px-4 cursor-pointer"
@@ -198,9 +236,25 @@ export default function WaitingRoomPage() {
     );
   }
 
+  // Active Prompting Phase View
+  if (roomData.gameState === "PROMPTING") {
+    return (
+      <main className="min-h-screen p-8 bg-slate-900 flex flex-col items-center justify-start font-sans relative">
+        <PromptForm
+          roomCode={roomData.roomCode}
+          promptText={roomData.activePrompt?.text || "Prepare your answer!"}
+          promptId={roomData.activePrompt?.id || ""}
+          timerLimit={roomData.timerLimit || 90}
+          roundStartedAt={roomData.roundStartedAt}
+          playerId={playerId}
+        />
+      </main>
+    );
+  }
+
+  // Default Waiting Lobby View
   return (
     <main className="min-h-screen p-8 bg-slate-900 flex flex-col items-center justify-start font-sans relative">
-      {/* Top Left Navigation Action Row */}
       <div className="w-full max-w-3xl flex justify-start mb-4 mt-2">
         <button
           onClick={handleLeaveRoom}
@@ -211,7 +265,6 @@ export default function WaitingRoomPage() {
       </div>
 
       <div className="w-full max-w-3xl space-y-8">
-        {/* Waiting Arena Meta Header Panel */}
         <div className="game-dashboard-card flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
             <span className="block text-sm font-bold font-mono tracking-wider text-slate-500 mb-1">
@@ -223,7 +276,7 @@ export default function WaitingRoomPage() {
           </div>
           <div className="text-center sm:text-right">
             <h2 className="game-header text-xl border-b-2 border-black pb-1 mb-2">
-              WAITING ARENA
+              WAITING LOBBY
             </h2>
             <span className="game-badge">
               PLAYERS JOINED: {roomData.players.length} / 10
@@ -231,7 +284,6 @@ export default function WaitingRoomPage() {
           </div>
         </div>
 
-        {/* Real-time Connected Players Tracking Grid */}
         <div className="game-dashboard-card min-h-75 space-y-4">
           <h3 className="game-header text-lg border-b border-slate-200 pb-2">
             CONNECTED ROSTER
@@ -260,7 +312,6 @@ export default function WaitingRoomPage() {
           )}
         </div>
 
-        {/* System Informational Status Box */}
         <div className="p-4 bg-slate-50 border-2 border-black rounded font-mono text-center text-xs text-slate-600 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
           THE MATCH WILL COMMENCE AUTOMATICALLY WHEN THE GAME ADMINISTRATOR
           CHANGES THE ROOM STATE.

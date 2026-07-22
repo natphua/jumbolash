@@ -60,6 +60,10 @@ export default function LobbyManager() {
         return;
       }
 
+      sessionStorage.setItem("jumbolash_player_id", data.id);
+      sessionStorage.setItem("jumbolash_player_room_code", data.roomCode);
+      sessionStorage.setItem("jumbolash_player_name", data.nickname);
+
       // Success - redirect them to the waiting room route
       router.push(`/room/${data.roomCode}`);
     } catch (err) {
@@ -89,7 +93,7 @@ export default function LobbyManager() {
       {view === "join" && (
         <form onSubmit={handlePlayerJoin} className="space-y-4">
           <h2 className="game-header text-center text-xl mb-2">
-            Enter the Arena
+            Join the Game
           </h2>
           <input
             type="text"

@@ -7,13 +7,18 @@ generator client {
 }
 
 model Room {
-  roomCode    String     @id @unique
-  gameState   String     @default("LOBBY") // LOBBY, PROMPTING, VOTING, RESULTS
-  roundNumber Int        @default(1)
-  totalRounds Int        @default(3)       
-  timerLimit  Int        @default(90)               
-  players     Player[]
-  responses   Response[]
+  roomCode       String    @id @unique
+  gameState      String    @default("LOBBY") // LOBBY, PROMPTING, VOTING, RESULTS
+  roundNumber    Int       @default(1)
+  totalRounds    Int       @default(5)       
+  timerLimit     Int       @default(90)                
+  
+  roundStartedAt DateTime? 
+  activePromptId String?   
+  activePrompt   Prompt?   @relation(fields: [activePromptId], references: [id])
+
+  players        Player[]
+  responses      Response[]
 }
 
 model Player {
@@ -24,19 +29,21 @@ model Player {
   room      Room       @relation(fields: [roomCode], references: [roomCode], onDelete: Cascade)
   responses Response[]
 
-  @@unique([roomCode, nickname])          // Guard constraint preventing duplicate names in the same room
+  @@unique([roomCode, nickname])       
 }
 
 model Prompt {
   id        String     @id @default(uuid())
   text      String     // The actual question
   used      Boolean    @default(false)
+  
   responses Response[]
+  rooms     Room[]     // Prisma requires this reverse relation for activePrompt
 }
 
 model Response {
   id         String @id @default(uuid())
-  answerText String
+  text       String @db.VarChar(120) // 120 char limit 
   votes      Int    @default(0)
   
   // Relations

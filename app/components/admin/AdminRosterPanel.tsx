@@ -5,7 +5,6 @@
  *
  * Created on 2026-07-19 by Natalie Phua.
  */
-
 "use client";
 
 import React from "react";
@@ -44,12 +43,6 @@ export default function AdminRosterPanel({ players }: AdminRosterPanelProps) {
             </div>
           ))}
         </div>
-      )}
-
-      {players.length >= 2 && (
-        <button className="game-box-jagged bg-logo-green w-full py-4 mt-8 text-xl text-white cursor-pointer">
-          LAUNCH MATCH STATE
-        </button>
       )}
     </div>
   );
