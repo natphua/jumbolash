@@ -1,3 +1,15 @@
+/**
+ * waiting-room.spec.ts
+ *
+ * End-to-end tests for the waiting room and real-time synchronization of the game lobby.
+ * Tests include:
+ * - 10-player cap limit enforcement
+ * - Real-time roster synchronization between admin and player views
+ * - Player leaving the room and admin ending the session
+ *
+ * Created on 2026-07-19 by Natalie Phua.
+ */
+
 import { test, expect, BrowserContext, Page } from "@playwright/test";
 import { prisma } from "../lib/prisma";
 import { generateRoomCode } from "../lib/helpers/room-code";

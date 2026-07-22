@@ -1,3 +1,13 @@
+/**
+ * prompting.spec.ts
+ *
+ * End-to-end tests for the prompting phase of the game. Tests include:
+ * - Player answer submission after admin launches a prompt
+ * - Same-browser player tabs maintaining separate identities
+ *
+ * Created on 2026-07-20 by Natalie Phua.
+ */
+
 import { test, expect, BrowserContext, Page } from "@playwright/test";
 import { prisma } from "../lib/prisma";
 

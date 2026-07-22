@@ -16,9 +16,15 @@ model Room {
   roundStartedAt DateTime? 
   activePromptId String?   
   activePrompt   Prompt?   @relation(fields: [activePromptId], references: [id])
+  usedPromptIds  String[]   @default([])
+  activeMatchupIndex Int    @default(0)
+  votingStartedAt DateTime?
+  revealStartedAt DateTime?
 
   players        Player[]
   responses      Response[]
+  matchups       Matchup[]
+  votes          Vote[]
 }
 
 model Player {
@@ -28,6 +34,7 @@ model Player {
   points    Int        @default(0)
   room      Room       @relation(fields: [roomCode], references: [roomCode], onDelete: Cascade)
   responses Response[]
+  votes     Vote[]
 
   @@unique([roomCode, nickname])       
 }
@@ -39,6 +46,7 @@ model Prompt {
   
   responses Response[]
   rooms     Room[]     // Prisma requires this reverse relation for activePrompt
+  matchups  Matchup[]
 }
 
 model Response {
@@ -54,7 +62,46 @@ model Response {
   room       Room   @relation(fields: [roomCode], references: [roomCode], onDelete: Cascade)
   player     Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
   prompt     Prompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  matchupsAsA Matchup[] @relation("ResponseA")
+  matchupsAsB Matchup[] @relation("ResponseB")
+  voteRecords Vote[]
 
   // Double check that a single player can only submit ONE answer per prompt
   @@unique([playerId, promptId])
+}
+
+model Matchup {
+  id          String   @id @default(uuid())
+  roomCode    String
+  promptId    String
+  responseAId String
+  responseBId String?
+  roundNumber Int
+  matchupIndex Int
+  status      String   @default("PENDING") // PENDING, ACTIVE, REVEALED, COMPLETE
+  createdAt   DateTime @default(now())
+
+  room       Room     @relation(fields: [roomCode], references: [roomCode], onDelete: Cascade)
+  prompt     Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  responseA  Response @relation("ResponseA", fields: [responseAId], references: [id], onDelete: Cascade)
+  responseB  Response? @relation("ResponseB", fields: [responseBId], references: [id], onDelete: Cascade)
+  votes      Vote[]
+
+  @@unique([roomCode, roundNumber, matchupIndex])
+}
+
+model Vote {
+  id                 String   @id @default(uuid())
+  roomCode           String
+  matchupId          String
+  voterPlayerId      String
+  selectedResponseId String
+  createdAt          DateTime @default(now())
+
+  room             Room     @relation(fields: [roomCode], references: [roomCode], onDelete: Cascade)
+  matchup          Matchup  @relation(fields: [matchupId], references: [id], onDelete: Cascade)
+  voterPlayer      Player   @relation(fields: [voterPlayerId], references: [id], onDelete: Cascade)
+  selectedResponse Response @relation(fields: [selectedResponseId], references: [id], onDelete: Cascade)
+
+  @@unique([matchupId, voterPlayerId])
 }

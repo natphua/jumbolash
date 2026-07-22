@@ -12,7 +12,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/supabase/client";
+import { GameState } from "@/lib/game-state";
 import PromptForm from "../../components/game/PromptForm";
+import VotingForm from "../../components/game/VotingForm";
+import LeaderboardView from "../../components/game/LeaderboardView";
 
 interface Player {
   id: string;
@@ -30,6 +33,24 @@ interface RoomData {
     text: string;
   } | null;
   players: Player[];
+  currentMatchup?: {
+    id: string;
+    matchupIndex: number;
+    prompt: { text: string } | null;
+    responseA: {
+      id: string;
+      text: string;
+      playerId: string;
+      authorNickname: string;
+    } | null;
+    responseB: {
+      id: string;
+      text: string;
+      playerId: string;
+      authorNickname: string;
+    } | null;
+  } | null;
+  leaderboard?: Player[];
 }
 
 async function fetchRoomData(roomCode: string) {
@@ -237,7 +258,7 @@ export default function RoomPage() {
   }
 
   // Active Prompting Phase View
-  if (roomData.gameState === "PROMPTING") {
+  if (roomData.gameState === GameState.Prompting) {
     return (
       <main className="min-h-screen p-8 bg-slate-900 flex flex-col items-center justify-start font-sans relative">
         <PromptForm
@@ -250,6 +271,20 @@ export default function RoomPage() {
         />
       </main>
     );
+  }
+
+  if (roomData.gameState === GameState.Voting && roomData.currentMatchup) {
+    return (
+      <VotingForm
+        roomCode={roomData.roomCode}
+        matchup={roomData.currentMatchup}
+        playerId={playerId}
+      />
+    );
+  }
+
+  if (roomData.gameState === GameState.Results) {
+    return <LeaderboardView players={roomData.leaderboard || roomData.players} />;
   }
 
   // Default Waiting Lobby View

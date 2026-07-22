@@ -5,12 +5,10 @@
  * Validates and stores player prompt submissions. Enforces server-side
  * timestamp verification to block tardy submissions past the countdown limit.
  *
- * Request Body:
- * {
- *   playerId: string;
- *   promptId: string;
- *   text: string;
- * }
+ * Request body:
+ *   - playerId (string): ID of player submitting response
+ *   - promptId (string): ID of the prompt being responded to
+ *   - text (string): The submitted response text
  *
  * Responses:
  * 200 OK - Response successfully saved
@@ -25,6 +23,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { supabaseAdmin } from "@/supabase/admin";
+import { GameState } from "@/lib/game-state";
 
 export async function POST(
   req: NextRequest,
@@ -84,7 +83,7 @@ export async function POST(
       return NextResponse.json({ error: "Room not found." }, { status: 404 });
     }
 
-    if (room.gameState !== "PROMPTING") {
+    if (room.gameState !== GameState.Prompting) {
       return NextResponse.json(
         { error: "Room is not currently accepting answer submissions." },
         { status: 403 },
@@ -102,7 +101,9 @@ export async function POST(
     const serverNow = Date.now();
     const roundStart = new Date(room.roundStartedAt).getTime();
     const timerLimitSeconds =
-      room.timerLimit > 1000 ? Math.floor(room.timerLimit / 1000) : room.timerLimit;
+      room.timerLimit > 1000
+        ? Math.floor(room.timerLimit / 1000)
+        : room.timerLimit;
     const timerLimitMs = timerLimitSeconds * 1000;
     const allowedEndTime = roundStart + timerLimitMs;
 

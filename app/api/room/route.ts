@@ -12,12 +12,31 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { supabaseAdmin } from "@/supabase/admin";
 import { generateRoomCode } from "@/lib/helpers/room-code";
+import { GameState } from "@/lib/game-state";
 
 interface Player {
   id: string;
   nickname: string;
   roomCode: string;
   points: number;
+}
+
+interface ResponseRecord {
+  id: string;
+  text: string;
+  playerId: string;
+  promptId: string;
+  roomCode: string;
+}
+
+interface VoteRecord {
+  id: string;
+  voterPlayerId: string;
+  selectedResponseId: string;
+}
+
+function sortLeaderboard(players: Player[]) {
+  return [...players].sort((a, b) => b.points - a.points);
 }
 
 /**
@@ -56,7 +75,7 @@ export async function POST() {
       .from("Room")
       .insert({
         roomCode: roomCode,
-        gameState: "LOBBY",
+        gameState: GameState.Lobby,
         totalRounds: 3,
         timerLimit: 90,
       })
@@ -224,11 +243,100 @@ export async function GET(req: Request) {
     if (playersError) throw playersError;
     if (promptError) throw promptError;
 
+    const roomPlayers = (players || []) as Player[];
+    let currentMatchup = null;
+
+    if (room.gameState === GameState.Voting) {
+      const { data: matchup, error: matchupError } = await supabaseAdmin
+        .from("Matchup")
+        .select("*")
+        .eq("roomCode", roomCode)
+        .eq("roundNumber", room.roundNumber)
+        .eq("matchupIndex", room.activeMatchupIndex)
+        .maybeSingle();
+
+      if (matchupError) throw matchupError;
+
+      if (matchup) {
+        const responseIds = [matchup.responseAId, matchup.responseBId].filter(
+          Boolean,
+        ) as string[];
+        const [{ data: responses, error: responsesError }, { data: votes, error: votesError }] =
+          await Promise.all([
+            supabaseAdmin
+              .from("Response")
+              .select("id, text, playerId, promptId, roomCode")
+              .in("id", responseIds),
+            supabaseAdmin
+              .from("Vote")
+              .select("id, voterPlayerId, selectedResponseId")
+              .eq("matchupId", matchup.id),
+          ]);
+
+        if (responsesError) throw responsesError;
+        if (votesError) throw votesError;
+
+        const responseMap = new Map(
+          ((responses || []) as ResponseRecord[]).map((response) => [
+            response.id,
+            response,
+          ]),
+        );
+        const playerMap = new Map(
+          roomPlayers.map((player) => [player.id, player]),
+        );
+        const matchupVotes = (votes || []) as VoteRecord[];
+
+        const serializeResponse = (responseId: string | null) => {
+          if (!responseId) return null;
+          const response = responseMap.get(responseId);
+          if (!response) return null;
+          const author = playerMap.get(response.playerId);
+          const responseVotes = matchupVotes.filter(
+            (vote) => vote.selectedResponseId === response.id,
+          );
+
+          return {
+            ...response,
+            authorNickname: author?.nickname || "Unknown",
+            voteCount: responseVotes.length,
+            voters: responseVotes.map((vote) => ({
+              playerId: vote.voterPlayerId,
+              nickname:
+                playerMap.get(vote.voterPlayerId)?.nickname || "Unknown",
+            })),
+          };
+        };
+
+        const responseA = serializeResponse(matchup.responseAId);
+        const responseB = serializeResponse(matchup.responseBId);
+        const authorIds = new Set(
+          [responseA?.playerId, responseB?.playerId].filter(Boolean),
+        );
+        const eligibleVoterIds = roomPlayers
+          .filter((player) => !authorIds.has(player.id))
+          .map((player) => player.id);
+
+        currentMatchup = {
+          ...matchup,
+          prompt: activePrompt,
+          responseA,
+          responseB,
+          votes: matchupVotes,
+          eligibleVoterIds,
+          eligibleVoteCount: eligibleVoterIds.length,
+          submittedVoteCount: matchupVotes.length,
+        };
+      }
+    }
+
     return NextResponse.json(
       {
         ...room,
         activePrompt,
-        players: players || [],
+        players: roomPlayers,
+        currentMatchup,
+        leaderboard: sortLeaderboard(roomPlayers),
       },
       { status: 200 },
     );
@@ -246,6 +354,22 @@ export async function PATCH(req: Request) {
     if (!roomCode) {
       return NextResponse.json(
         { error: "Room code is required." },
+        { status: 400 },
+      );
+    }
+
+    const { count: promptCount, error: promptCountError } = await supabaseAdmin
+      .from("Prompt")
+      .select("id", { count: "exact", head: true });
+
+    if (promptCountError) throw promptCountError;
+
+    if (totalRounds > (promptCount || 0)) {
+      return NextResponse.json(
+        {
+          error:
+            "Rounds cannot exceed the number of prompts in the database.",
+        },
         { status: 400 },
       );
     }

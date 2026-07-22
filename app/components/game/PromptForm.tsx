@@ -9,7 +9,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface PromptFormProps {
   roomCode: string;
@@ -36,6 +36,7 @@ export default function PromptForm({
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const displayedTimeLeft = roundStartedAt ? timeLeft : timerLimitSeconds;
+  const hasTransitionedRef = useRef(false);
 
   // Synchronized countdown calculation
   useEffect(() => {
@@ -53,6 +54,18 @@ export default function PromptForm({
 
     return () => clearInterval(interval);
   }, [roundStartedAt, timerLimitSeconds]);
+
+  useEffect(() => {
+    if (displayedTimeLeft > 0 || hasTransitionedRef.current) return;
+
+    hasTransitionedRef.current = true;
+    fetch(`/api/room/${roomCode}/transition`, { method: "POST" }).catch(
+      (err) => {
+        console.error("Failed to transition to voting:", err);
+        hasTransitionedRef.current = false;
+      },
+    );
+  }, [displayedTimeLeft, roomCode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

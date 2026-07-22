@@ -10,7 +10,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/supabase/client";
 
 interface ActivePrompt {
@@ -43,6 +43,7 @@ export default function AdminPromptView({
   const [isCounterPulsing, setIsCounterPulsing] = useState<boolean>(false);
   const [timeLeft, setTimeLeft] = useState<number>(timerLimitSeconds);
   const displayedTimeLeft = roundStartedAt ? timeLeft : timerLimitSeconds;
+  const hasTransitionedRef = useRef(false);
 
   useEffect(() => {
     if (!roundStartedAt) return;
@@ -58,6 +59,18 @@ export default function AdminPromptView({
 
     return () => clearInterval(interval);
   }, [roundStartedAt, timerLimitSeconds]);
+
+  useEffect(() => {
+    if (displayedTimeLeft > 0 || hasTransitionedRef.current) return;
+
+    hasTransitionedRef.current = true;
+    fetch(`/api/room/${roomCode}/transition`, { method: "POST" }).catch(
+      (err) => {
+        console.error("Failed to transition to voting:", err);
+        hasTransitionedRef.current = false;
+      },
+    );
+  }, [displayedTimeLeft, roomCode]);
 
   useEffect(() => {
     if (!roomCode) return;

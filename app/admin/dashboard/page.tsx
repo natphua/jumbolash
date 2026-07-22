@@ -13,18 +13,44 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/supabase/client";
+import { GameState } from "@/lib/game-state";
 import RoomSettingsPanel from "../../components/admin/RoomSettingsPanel";
 import AdminRosterPanel from "../../components/admin/AdminRosterPanel";
 import AdminPromptView from "../../components/admin/AdminPromptView";
+import AdminVotingView from "../../components/admin/AdminVotingView";
+import LeaderboardView from "../../components/game/LeaderboardView";
 
 interface Player {
   id: string;
   nickname: string;
+  points: number;
 }
 
 interface ActivePrompt {
   id: string;
   text: string;
+}
+
+interface CurrentMatchup {
+  id: string;
+  matchupIndex: number;
+  prompt: { text: string } | null;
+  responseA: {
+    id: string;
+    text: string;
+    authorNickname: string;
+    voteCount: number;
+    voters: Array<{ playerId: string; nickname: string }>;
+  } | null;
+  responseB: {
+    id: string;
+    text: string;
+    authorNickname: string;
+    voteCount: number;
+    voters: Array<{ playerId: string; nickname: string }>;
+  } | null;
+  eligibleVoteCount: number;
+  submittedVoteCount: number;
 }
 
 function normalizeTimerLimitSeconds(timerLimit: number) {
@@ -41,6 +67,11 @@ export default function AdminDashboard() {
   const [gameState, setGameState] = useState<string>("LOBBY");
   const [activePrompt, setActivePrompt] = useState<ActivePrompt | null>(null);
   const [roundStartedAt, setRoundStartedAt] = useState<string | null>(null);
+  const [currentMatchup, setCurrentMatchup] = useState<CurrentMatchup | null>(
+    null,
+  );
+  const [votingStartedAt, setVotingStartedAt] = useState<string | null>(null);
+  const [leaderboard, setLeaderboard] = useState<Player[]>([]);
 
   const [rounds, setRounds] = useState<string>("3");
   const [currentRound, setCurrentRound] = useState<number>(1);
@@ -90,6 +121,9 @@ export default function AdminDashboard() {
         setRoundStartedAt(roomData.roundStartedAt);
         setActivePrompt(roomData.activePrompt);
         setPlayers(roomData.players || []);
+        setCurrentMatchup(roomData.currentMatchup);
+        setVotingStartedAt(roomData.votingStartedAt);
+        setLeaderboard(roomData.leaderboard || roomData.players || []);
       }
       setLoading(false);
     };
@@ -121,6 +155,9 @@ export default function AdminDashboard() {
         setRoundStartedAt(roomData.roundStartedAt);
         setCurrentRound(roomData.roundNumber);
         setActivePrompt(roomData.activePrompt);
+        setCurrentMatchup(roomData.currentMatchup);
+        setVotingStartedAt(roomData.votingStartedAt);
+        setLeaderboard(roomData.leaderboard || roomData.players || []);
 
         if (roomData.gameState === "PROMPTING") {
           setTimer(String(normalizeTimerLimitSeconds(roomData.timerLimit)));
@@ -166,16 +203,24 @@ export default function AdminDashboard() {
           const updated = payload.new;
           setGameState(updated.gameState);
           setRoundStartedAt(updated.roundStartedAt);
+          setVotingStartedAt(updated.votingStartedAt);
           setCurrentRound(updated.roundNumber);
           setTimer(String(normalizeTimerLimitSeconds(updated.timerLimit)));
 
-          if (updated.gameState === "PROMPTING") {
+          if (
+            updated.gameState === GameState.Prompting ||
+            updated.gameState === GameState.Voting ||
+            updated.gameState === GameState.Results
+          ) {
             const roomResponse = await fetch(`/api/room?code=${roomCode}`);
             const roomData = await roomResponse.json();
 
             if (roomResponse.ok) {
               setActivePrompt(roomData.activePrompt);
               setPlayers(roomData.players || []);
+              setCurrentMatchup(roomData.currentMatchup);
+              setVotingStartedAt(roomData.votingStartedAt);
+              setLeaderboard(roomData.leaderboard || roomData.players || []);
             } else {
               console.error("Failed to refresh room state:", roomData.error);
             }
@@ -284,7 +329,7 @@ export default function AdminDashboard() {
       setRoundStartedAt(data.roundStartedAt || new Date().toISOString());
 
       // 3. Update game state to switch the view
-      setGameState("PROMPTING");
+      setGameState(GameState.Prompting);
     } catch (err) {
       console.error("Failed to start game:", err);
       alert("Network error starting match.");
@@ -327,7 +372,7 @@ export default function AdminDashboard() {
   }
 
   // Active Prompting Phase View for Admin
-  if (gameState === "PROMPTING" && roomCode) {
+  if (gameState === GameState.Prompting && roomCode) {
     return (
       <AdminPromptView
         roomCode={roomCode}
@@ -339,6 +384,20 @@ export default function AdminDashboard() {
         totalRounds={parseInt(rounds, 10) || 5}
       />
     );
+  }
+
+  if (gameState === GameState.Voting && roomCode) {
+    return (
+      <AdminVotingView
+        roomCode={roomCode}
+        currentMatchup={currentMatchup}
+        votingStartedAt={votingStartedAt}
+      />
+    );
+  }
+
+  if (gameState === GameState.Results) {
+    return <LeaderboardView players={leaderboard.length ? leaderboard : players} />;
   }
 
   // Default Host Lobby View
