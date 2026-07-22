@@ -35,6 +35,7 @@ export default function PromptForm({
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const displayedTimeLeft = roundStartedAt ? timeLeft : timerLimitSeconds;
 
   // Synchronized countdown calculation
   useEffect(() => {
@@ -59,7 +60,7 @@ export default function PromptForm({
       !answer.trim() ||
       !playerId ||
       isSubmitted ||
-      timeLeft === 0 ||
+      displayedTimeLeft === 0 ||
       submitting
     ) {
       return;
@@ -95,7 +96,7 @@ export default function PromptForm({
     }
   };
 
-  const isLocked = isSubmitted || timeLeft === 0 || submitting;
+  const isLocked = isSubmitted || displayedTimeLeft === 0 || submitting;
 
   return (
     <div className="w-full max-w-3xl space-y-6">
@@ -113,12 +114,12 @@ export default function PromptForm({
           </span>
           <span
             className={`font-mono font-bold text-3xl px-3 py-1 border-2 border-black rounded ${
-              timeLeft <= 10
+              displayedTimeLeft <= 10
                 ? "bg-rose-600 text-white animate-bounce"
                 : "bg-amber-300 text-slate-900"
             }`}
           >
-            {timeLeft}s
+            {displayedTimeLeft}s
           </span>
         </div>
       </div>
@@ -142,7 +143,7 @@ export default function PromptForm({
               onChange={(e) => setAnswer(e.target.value.slice(0, 120))}
               disabled={isLocked}
               placeholder={
-                timeLeft === 0
+                displayedTimeLeft === 0
                   ? "TIME IS UP!"
                   : isSubmitted
                     ? "ANSWER LOCKED IN!"
@@ -167,7 +168,7 @@ export default function PromptForm({
               ? "SUBMISSION RECEIVED"
               : submitting
                 ? "LOCKING IN..."
-                : timeLeft === 0
+                : displayedTimeLeft === 0
                   ? "TIME EXPIRED"
                   : "SUBMIT ANSWER"}
           </button>

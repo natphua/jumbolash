@@ -19,7 +19,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabaseAdmin } from "@/supabase/admin";
 
 export async function POST(
   req: NextRequest,
@@ -37,16 +37,26 @@ export async function POST(
     }
 
     // 1. Fetch room to confirm existence and current state
-    const room = await prisma.room.findUnique({
-      where: { roomCode },
-      include: { players: true },
-    });
+    const { data: room, error: roomError } = await supabaseAdmin
+      .from("Room")
+      .select("*")
+      .eq("roomCode", roomCode)
+      .maybeSingle();
+
+    if (roomError) throw roomError;
 
     if (!room) {
       return NextResponse.json({ error: "Room not found." }, { status: 404 });
     }
 
-    if (room.players.length < 2) {
+    const { data: players, error: playersError } = await supabaseAdmin
+      .from("Player")
+      .select("id")
+      .eq("roomCode", roomCode);
+
+    if (playersError) throw playersError;
+
+    if ((players || []).length < 2) {
       return NextResponse.json(
         { error: "At least 2 players are required to start the match." },
         { status: 400 },
@@ -54,9 +64,13 @@ export async function POST(
     }
 
     // 2. Fetch a random prompt from the database
-    const totalPrompts = await prisma.prompt.count();
+    const { count: totalPrompts, error: countError } = await supabaseAdmin
+      .from("Prompt")
+      .select("id", { count: "exact", head: true });
 
-    if (totalPrompts === 0) {
+    if (countError) throw countError;
+
+    if (!totalPrompts) {
       return NextResponse.json(
         { error: "No available prompts found in the database." },
         { status: 500 },
@@ -64,9 +78,14 @@ export async function POST(
     }
 
     const randomIndex = Math.floor(Math.random() * totalPrompts);
-    const randomPrompt = await prisma.prompt.findFirst({
-      skip: randomIndex,
-    });
+    const { data: prompts, error: promptError } = await supabaseAdmin
+      .from("Prompt")
+      .select("id, text")
+      .range(randomIndex, randomIndex);
+
+    if (promptError) throw promptError;
+
+    const randomPrompt = prompts?.[0];
 
     if (!randomPrompt) {
       return NextResponse.json(
@@ -76,21 +95,26 @@ export async function POST(
     }
 
     // 3. Update Room state: transition to PROMPTING & attach active prompt
-    const updatedRoom = await prisma.room.update({
-      where: { roomCode },
-      data: {
+    const { data: updatedRoom, error: updateError } = await supabaseAdmin
+      .from("Room")
+      .update({
         gameState: "PROMPTING",
         activePromptId: randomPrompt.id,
-        roundStartedAt: new Date(),
+        roundStartedAt: new Date().toISOString(),
         roundNumber: room.roundNumber || 1,
-      },
-    });
+      })
+      .eq("roomCode", roomCode)
+      .select("roomCode, roundNumber, roundStartedAt")
+      .single();
+
+    if (updateError) throw updateError;
 
     return NextResponse.json(
       {
         message: "Game state successfully updated to PROMPTING.",
         roomCode: updatedRoom.roomCode,
         activePromptId: randomPrompt.id,
+        activePrompt: randomPrompt,
         roundNumber: updatedRoom.roundNumber,
         roundStartedAt: updatedRoom.roundStartedAt,
       },

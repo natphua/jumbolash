@@ -9,8 +9,16 @@
  */
 
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { randomUUID } from "node:crypto";
+import { supabaseAdmin } from "@/supabase/admin";
 import { generateRoomCode } from "@/lib/helpers/room-code";
+
+interface Player {
+  id: string;
+  nickname: string;
+  roomCode: string;
+  points: number;
+}
 
 /**
  * @description Creates a unique game room.
@@ -26,9 +34,13 @@ export async function POST() {
 
     while (!isUnique && attempts < 5) {
       roomCode = generateRoomCode();
-      const existingRoom = await prisma.room.findUnique({
-        where: { roomCode: roomCode },
-      });
+      const { data: existingRoom, error } = await supabaseAdmin
+        .from("Room")
+        .select("roomCode")
+        .eq("roomCode", roomCode)
+        .maybeSingle();
+
+      if (error) throw error;
       if (!existingRoom) isUnique = true;
       attempts++;
     }
@@ -40,14 +52,18 @@ export async function POST() {
       );
     }
 
-    const newRoom = await prisma.room.create({
-      data: {
+    const { data: newRoom, error } = await supabaseAdmin
+      .from("Room")
+      .insert({
         roomCode: roomCode,
         gameState: "LOBBY",
         totalRounds: 3,
         timerLimit: 90,
-      },
-    });
+      })
+      .select("roomCode")
+      .single();
+
+    if (error) throw error;
 
     const response = NextResponse.json(
       { roomCode: newRoom.roomCode },
@@ -89,10 +105,13 @@ export async function PUT(req: Request) {
 
     const formattedNickname = nickname.trim();
 
-    const room = await prisma.room.findUnique({
-      where: { roomCode: roomCode },
-      include: { players: true },
-    });
+    const { data: room, error: roomError } = await supabaseAdmin
+      .from("Room")
+      .select("*")
+      .eq("roomCode", roomCode)
+      .maybeSingle();
+
+    if (roomError) throw roomError;
 
     if (!room) {
       return NextResponse.json(
@@ -101,14 +120,23 @@ export async function PUT(req: Request) {
       );
     }
 
-    if (room.players.length >= 10) {
+    const { data: players, error: playersError } = await supabaseAdmin
+      .from("Player")
+      .select("id, nickname, roomCode, points")
+      .eq("roomCode", roomCode);
+
+    if (playersError) throw playersError;
+
+    const roomPlayers = (players || []) as Player[];
+
+    if (roomPlayers.length >= 10) {
       return NextResponse.json(
         { error: "This room is full (max 10 players)." },
         { status: 400 },
       );
     }
 
-    const isNameTaken = room.players.some(
+    const isNameTaken = roomPlayers.some(
       (p) => p.nickname.toLowerCase() === formattedNickname.toLowerCase(),
     );
 
@@ -119,13 +147,18 @@ export async function PUT(req: Request) {
       );
     }
 
-    const newPlayer = await prisma.player.create({
-      data: {
+    const { data: newPlayer, error: playerError } = await supabaseAdmin
+      .from("Player")
+      .insert({
+        id: randomUUID(),
         nickname: formattedNickname,
         roomCode: roomCode,
         points: 0,
-      },
-    });
+      })
+      .select("id, nickname, roomCode, points")
+      .single();
+
+    if (playerError) throw playerError;
 
     const response = NextResponse.json(newPlayer, { status: 200 });
 
@@ -161,27 +194,104 @@ export async function GET(req: Request) {
       );
     }
 
-    const room = await prisma.room.findUnique({
-      where: { roomCode },
-      include: {
-        activePrompt: {
-          select: {
-            id: true,
-            text: true,
-          },
-        },
-        players: true,
-      },
-    });
+    const { data: room, error: roomError } = await supabaseAdmin
+      .from("Room")
+      .select("*")
+      .eq("roomCode", roomCode)
+      .maybeSingle();
+
+    if (roomError) throw roomError;
 
     if (!room) {
       return NextResponse.json({ error: "Room not found." }, { status: 404 });
     }
 
-    return NextResponse.json(room, { status: 200 });
+    const [{ data: players, error: playersError }, { data: activePrompt, error: promptError }] =
+      await Promise.all([
+        supabaseAdmin
+          .from("Player")
+          .select("id, nickname, roomCode, points")
+          .eq("roomCode", roomCode),
+        room.activePromptId
+          ? supabaseAdmin
+              .from("Prompt")
+              .select("id, text")
+              .eq("id", room.activePromptId)
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+      ]);
+
+    if (playersError) throw playersError;
+    if (promptError) throw promptError;
+
+    return NextResponse.json(
+      {
+        ...room,
+        activePrompt,
+        players: players || [],
+      },
+      { status: 200 },
+    );
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : "Failed to fetch room data.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: Request) {
+  try {
+    const { roomCode, totalRounds, timerLimit } = await req.json();
+
+    if (!roomCode) {
+      return NextResponse.json(
+        { error: "Room code is required." },
+        { status: 400 },
+      );
+    }
+
+    const { error } = await supabaseAdmin
+      .from("Room")
+      .update({ totalRounds, timerLimit })
+      .eq("roomCode", roomCode);
+
+    if (error) throw error;
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "Failed to update room settings.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const roomCode = searchParams.get("code")?.toUpperCase().trim();
+    const playerId = searchParams.get("playerId");
+
+    if (!roomCode) {
+      return NextResponse.json(
+        { error: "Missing room code parameter." },
+        { status: 400 },
+      );
+    }
+
+    const { error } = playerId
+      ? await supabaseAdmin
+          .from("Player")
+          .delete()
+          .eq("id", playerId)
+          .eq("roomCode", roomCode)
+      : await supabaseAdmin.from("Room").delete().eq("roomCode", roomCode);
+
+    if (error) throw error;
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "Failed to delete room.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

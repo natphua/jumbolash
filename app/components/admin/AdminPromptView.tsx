@@ -11,7 +11,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/supabase/client";
 
 interface ActivePrompt {
   id: string;
@@ -42,6 +42,7 @@ export default function AdminPromptView({
   const [submissionCount, setSubmissionCount] = useState<number>(0);
   const [isCounterPulsing, setIsCounterPulsing] = useState<boolean>(false);
   const [timeLeft, setTimeLeft] = useState<number>(timerLimitSeconds);
+  const displayedTimeLeft = roundStartedAt ? timeLeft : timerLimitSeconds;
 
   useEffect(() => {
     if (!roundStartedAt) return;
@@ -62,17 +63,15 @@ export default function AdminPromptView({
     if (!roomCode) return;
 
     const fetchResponseCount = async () => {
-      const { count, error } = await supabase
-        .from("Response")
-        .select("*", { count: "exact", head: true })
-        .eq("roomCode", roomCode);
+      const response = await fetch(`/api/room/${roomCode}/responses/count`);
+      const data = await response.json();
 
-      if (error) {
-        console.error("Error fetching response count:", error);
+      if (!response.ok) {
+        console.error("Error fetching response count:", data.error);
         return;
       }
 
-      setSubmissionCount(count || 0);
+      setSubmissionCount(data.count || 0);
     };
 
     fetchResponseCount();
@@ -96,7 +95,10 @@ export default function AdminPromptView({
       )
       .subscribe();
 
+    const fallbackRefresh = window.setInterval(fetchResponseCount, 1500);
+
     return () => {
+      window.clearInterval(fallbackRefresh);
       supabase.removeChannel(responseChannel);
     };
   }, [roomCode]);
@@ -134,12 +136,12 @@ export default function AdminPromptView({
             </span>
             <span
               className={`text-5xl font-mono font-black ${
-                timeLeft <= 10
+                displayedTimeLeft <= 10
                   ? "text-rose-500 animate-pulse"
                   : "text-amber-400"
               }`}
             >
-              {timeLeft}s
+              {displayedTimeLeft}s
             </span>
           </div>
 

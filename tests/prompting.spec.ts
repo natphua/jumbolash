@@ -66,21 +66,21 @@ test.describe("Prompting Round Flow", () => {
       await expect(adminPage.locator("text=PHASE: PROMPTING")).toBeVisible({
         timeout: 7000,
       });
-      await expect(playerOnePage.locator("text=SUBMIT YOUR ANSWER")).toBeVisible(
-        {
-          timeout: 7000,
-        },
-      );
+      await expect(
+        playerOnePage.locator("text=SUBMIT YOUR ANSWER"),
+      ).toBeVisible({
+        timeout: 7000,
+      });
 
       await playerOnePage
         .locator("textarea")
         .fill("The recursive lab partner nobody warned you about.");
       await playerOnePage.click("button:has-text('SUBMIT ANSWER')");
-      await expect(playerOnePage.locator("text=SUBMISSION RECEIVED")).toBeVisible(
-        {
-          timeout: 7000,
-        },
-      );
+      await expect(
+        playerOnePage.locator("text=SUBMISSION RECEIVED"),
+      ).toBeVisible({
+        timeout: 7000,
+      });
 
       const dbResponse = await prisma.response.findFirst({
         where: {
@@ -135,10 +135,10 @@ test.describe("Prompting Round Flow", () => {
       await adminPage.click("button:has-text('LAUNCH MATCH')");
 
       await expect(
-        sameBrowserPlayerOne.locator("text=SUBMIT YOUR ANSWER"),
+        sameBrowserPlayerOne.locator("text=SUBMIT ANSWER"),
       ).toBeVisible({ timeout: 7000 });
       await expect(
-        sameBrowserPlayerTwo.locator("text=SUBMIT YOUR ANSWER"),
+        sameBrowserPlayerTwo.locator("text=SUBMIT ANSWER"),
       ).toBeVisible({ timeout: 7000 });
 
       await sameBrowserPlayerOne

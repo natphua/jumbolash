@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/supabase/client";
 import PromptForm from "../../components/game/PromptForm";
 
 interface Player {
@@ -30,6 +30,17 @@ interface RoomData {
     text: string;
   } | null;
   players: Player[];
+}
+
+async function fetchRoomData(roomCode: string) {
+  const response = await fetch(`/api/room?code=${roomCode}`);
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Failed to load room data.");
+  }
+
+  return data as RoomData;
 }
 
 export default function RoomPage() {
@@ -65,11 +76,7 @@ export default function RoomPage() {
             : cookiePlayerId,
         );
 
-        const response = await fetch(`/api/room?code=${roomCode}`);
-        const data = await response.json();
-
-        if (!response.ok)
-          throw new Error(data.error || "Failed to load room data.");
+        const data = await fetchRoomData(roomCode);
 
         if (!isMounted) return;
 
@@ -110,11 +117,12 @@ export default function RoomPage() {
           filter: `roomCode=eq.${roomCode}`,
         },
         async () => {
-          // Re-fetch room data to get populated active prompt relation
-          const response = await fetch(`/api/room?code=${roomCode}`);
-          const data = await response.json();
-          if (response.ok) {
+          try {
+            // Re-fetch room data to get populated active prompt relation
+            const data = await fetchRoomData(roomCode);
             setRoomData(data);
+          } catch (err) {
+            console.error("Failed to refresh room state:", err);
           }
         },
       )
@@ -144,16 +152,27 @@ export default function RoomPage() {
           filter: `roomCode=eq.${roomCode}`,
         },
         async () => {
-          const response = await fetch(`/api/room?code=${roomCode}`);
-          const data = await response.json();
-          if (response.ok) {
+          try {
+            const data = await fetchRoomData(roomCode);
             setRoomData(data);
+          } catch (err) {
+            console.error("Failed to refresh roster state:", err);
           }
         },
       )
       .subscribe();
 
+    const fallbackRefresh = window.setInterval(async () => {
+      try {
+        const data = await fetchRoomData(roomCode);
+        setRoomData(data);
+      } catch (err) {
+        console.error("Failed to poll room state:", err);
+      }
+    }, 1500);
+
     return () => {
+      window.clearInterval(fallbackRefresh);
       supabase.removeChannel(channel);
     };
   }, [roomCode, router]);
@@ -166,12 +185,17 @@ export default function RoomPage() {
 
     try {
       if (playerId) {
-        const { error } = await supabase
-          .from("Player")
-          .delete()
-          .eq("id", playerId);
+        const response = await fetch(
+          `/api/room?code=${roomCode}&playerId=${playerId}`,
+          {
+            method: "DELETE",
+          },
+        );
+        const data = await response.json();
 
-        if (error) throw error;
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to leave room.");
+        }
       }
 
       document.cookie = "player_id=; path=/; Max-Age=0;";

@@ -12,7 +12,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/supabase/client";
 import RoomSettingsPanel from "../../components/admin/RoomSettingsPanel";
 import AdminRosterPanel from "../../components/admin/AdminRosterPanel";
 import AdminPromptView from "../../components/admin/AdminPromptView";
@@ -71,44 +71,25 @@ export default function AdminDashboard() {
 
       setRoomCode(code);
 
-      const [roomRes, playersRes] = await Promise.all([
-        supabase
-          .from("Room")
-          .select(
-            "totalRounds, roundNumber, timerLimit, gameState, roundStartedAt, activePromptId",
-          )
-          .eq("roomCode", code)
-          .single(),
-        supabase.from("Player").select("id, nickname").eq("roomCode", code),
-      ]);
+      const roomResponse = await fetch(`/api/room?code=${code}`);
+      const roomData = await roomResponse.json();
+
+      if (!roomResponse.ok) {
+        throw new Error(roomData.error || "Failed to load room data.");
+      }
 
       if (!isActive) return;
 
-      if (roomRes.data) {
-        setRounds(String(roomRes.data.totalRounds));
-        if (roomRes.data.roundNumber) {
-          setCurrentRound(roomRes.data.roundNumber);
+      if (roomData) {
+        setRounds(String(roomData.totalRounds));
+        if (roomData.roundNumber) {
+          setCurrentRound(roomData.roundNumber);
         }
-        setTimer(String(normalizeTimerLimitSeconds(roomRes.data.timerLimit)));
-        setGameState(roomRes.data.gameState);
-        setRoundStartedAt(roomRes.data.roundStartedAt);
-
-        if (roomRes.data.activePromptId) {
-          const { data: promptData, error } = await supabase
-            .from("Prompt")
-            .select("id, text")
-            .eq("id", roomRes.data.activePromptId)
-            .single();
-
-          if (promptData) {
-            setActivePrompt(promptData);
-          } else if (error) {
-            console.error("Failed to fetch active prompt text:", error);
-          }
-        }
-      }
-      if (playersRes.data) {
-        setPlayers(playersRes.data);
+        setTimer(String(normalizeTimerLimitSeconds(roomData.timerLimit)));
+        setGameState(roomData.gameState);
+        setRoundStartedAt(roomData.roundStartedAt);
+        setActivePrompt(roomData.activePrompt);
+        setPlayers(roomData.players || []);
       }
       setLoading(false);
     };
@@ -124,6 +105,30 @@ export default function AdminDashboard() {
   // Room updates
   useEffect(() => {
     if (!roomCode) return;
+
+    const refreshRoomSnapshot = async () => {
+      try {
+        const roomResponse = await fetch(`/api/room?code=${roomCode}`);
+        const roomData = await roomResponse.json();
+
+        if (!roomResponse.ok) {
+          console.error("Failed to refresh room snapshot:", roomData.error);
+          return;
+        }
+
+        setPlayers(roomData.players || []);
+        setGameState(roomData.gameState);
+        setRoundStartedAt(roomData.roundStartedAt);
+        setCurrentRound(roomData.roundNumber);
+        setActivePrompt(roomData.activePrompt);
+
+        if (roomData.gameState === "PROMPTING") {
+          setTimer(String(normalizeTimerLimitSeconds(roomData.timerLimit)));
+        }
+      } catch (err) {
+        console.error("Failed to refresh room snapshot:", err);
+      }
+    };
 
     // Roster Channel
     const playerChannel = supabase
@@ -162,22 +167,27 @@ export default function AdminDashboard() {
           setGameState(updated.gameState);
           setRoundStartedAt(updated.roundStartedAt);
           setCurrentRound(updated.roundNumber);
+          setTimer(String(normalizeTimerLimitSeconds(updated.timerLimit)));
 
-          // If transitioning to PROMPTING, fetch the active prompt details
-          if (updated.gameState === "PROMPTING" && updated.activePromptId) {
-            const { data } = await supabase
-              .from("Prompt")
-              .select("id, text")
-              .eq("id", updated.activePromptId)
-              .single();
+          if (updated.gameState === "PROMPTING") {
+            const roomResponse = await fetch(`/api/room?code=${roomCode}`);
+            const roomData = await roomResponse.json();
 
-            if (data) setActivePrompt(data);
+            if (roomResponse.ok) {
+              setActivePrompt(roomData.activePrompt);
+              setPlayers(roomData.players || []);
+            } else {
+              console.error("Failed to refresh room state:", roomData.error);
+            }
           }
         },
       )
       .subscribe();
 
+    const fallbackRefresh = window.setInterval(refreshRoomSnapshot, 1500);
+
     return () => {
+      window.clearInterval(fallbackRefresh);
       supabase.removeChannel(playerChannel);
       supabase.removeChannel(roomChannel);
     };
@@ -219,14 +229,21 @@ export default function AdminDashboard() {
 
     setValidationError(null);
 
-    const { error } = await supabase
-      .from("Room")
-      .update({ totalRounds: parsedRounds, timerLimit: parsedTimer })
-      .eq("roomCode", roomCode);
+    const response = await fetch("/api/room", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        roomCode,
+        totalRounds: parsedRounds,
+        timerLimit: parsedTimer,
+      }),
+    });
 
-    if (error) {
+    const data = await response.json();
+
+    if (!response.ok) {
       setValidationError(
-        "Failed to save parameter configurations: " + error.message,
+        "Failed to save parameter configurations: " + data.error,
       );
     } else {
       alert("Match configurations updated successfully.");
@@ -259,19 +276,8 @@ export default function AdminDashboard() {
         alert(data.error || "Failed to start match.");
       }
 
-      // 1. Fetch the actual prompt text using the UUID returned from the API
-      if (data.activePromptId) {
-        const { data: promptData, error } = await supabase
-          .from("Prompt")
-          .select("id, text")
-          .eq("id", data.activePromptId)
-          .single();
-
-        if (promptData) {
-          setActivePrompt(promptData);
-        } else if (error) {
-          console.error("Failed to fetch active prompt text:", error);
-        }
+      if (data.activePrompt) {
+        setActivePrompt(data.activePrompt);
       }
 
       // 2. Fallback for start time if not returned explicitly by API
@@ -296,12 +302,12 @@ export default function AdminDashboard() {
     if (!confirmEnd) return;
 
     try {
-      const { error } = await supabase
-        .from("Room")
-        .delete()
-        .eq("roomCode", roomCode);
+      const response = await fetch(`/api/room?code=${roomCode}`, {
+        method: "DELETE",
+      });
 
-      if (error) throw error;
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to end room.");
 
       document.cookie = "hosted_room_code=; path=/; Max-Age=0;";
       router.replace("/");

@@ -23,7 +23,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { randomUUID } from "node:crypto";
+import { supabaseAdmin } from "@/supabase/admin";
 
 export async function POST(
   req: NextRequest,
@@ -71,9 +72,13 @@ export async function POST(
     }
 
     // 2. Fetch room state with current round details
-    const room = await prisma.room.findUnique({
-      where: { roomCode },
-    });
+    const { data: room, error: roomError } = await supabaseAdmin
+      .from("Room")
+      .select("*")
+      .eq("roomCode", roomCode)
+      .maybeSingle();
+
+    if (roomError) throw roomError;
 
     if (!room) {
       return NextResponse.json({ error: "Room not found." }, { status: 404 });
@@ -112,13 +117,15 @@ export async function POST(
     }
 
     // 4. Duplicate submission check for the current round
-    const existingResponse = await prisma.response.findFirst({
-      where: {
-        playerId,
-        promptId,
-        roomCode,
-      },
-    });
+    const { data: existingResponse, error: existingError } = await supabaseAdmin
+      .from("Response")
+      .select("id")
+      .eq("playerId", playerId)
+      .eq("promptId", promptId)
+      .eq("roomCode", roomCode)
+      .maybeSingle();
+
+    if (existingError) throw existingError;
 
     if (existingResponse) {
       return NextResponse.json(
@@ -128,14 +135,19 @@ export async function POST(
     }
 
     // 5. Save submission to database
-    const newResponse = await prisma.response.create({
-      data: {
+    const { data: newResponse, error: responseError } = await supabaseAdmin
+      .from("Response")
+      .insert({
+        id: randomUUID(),
         text: trimmedText,
         playerId,
         promptId,
         roomCode,
-      },
-    });
+      })
+      .select("id")
+      .single();
+
+    if (responseError) throw responseError;
 
     return NextResponse.json(
       {
