@@ -14,7 +14,7 @@ import { prisma } from "../lib/prisma";
 import { GameState, POINTS_PER_VOTE } from "../lib/game-state";
 
 test.describe("Voting Engine", () => {
-  test("VE-1: transition creates matchups and vote scoring advances the flow", async ({
+  test("VE-1: transition creates one matchup per prompt and vote scoring advances the flow", async ({
     request,
   }) => {
     const roomCode = `V${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
@@ -74,7 +74,7 @@ test.describe("Voting Engine", () => {
           responseB: true,
         },
       });
-      expect(matchups).toHaveLength(2);
+      expect(matchups).toHaveLength(1);
 
       const firstMatchup = matchups[0];
       expect(firstMatchup.responseB).not.toBeNull();
@@ -123,7 +123,7 @@ test.describe("Voting Engine", () => {
       const roomAfterVote = await prisma.room.findUniqueOrThrow({
         where: { roomCode },
       });
-      expect(roomAfterVote.activeMatchupIndex).toBe(1);
+      expect(roomAfterVote.gameState).toBe(GameState.Results);
     } finally {
       await prisma.room.deleteMany({ where: { roomCode } });
       await prisma.prompt.deleteMany({ where: { id: prompt.id } });
@@ -198,6 +198,78 @@ test.describe("Voting Engine", () => {
       await prisma.room.deleteMany({ where: { roomCode } });
       await prisma.prompt.deleteMany({
         where: { id: { in: [firstPrompt.id, secondPrompt.id] } },
+      });
+    }
+  });
+
+  test("VE-3: final transition creates one random 1v1 matchup per answered prompt", async ({
+    request,
+  }) => {
+    const roomCode = `O${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+    const prompts = await Promise.all([
+      prisma.prompt.create({
+        data: { text: "A one-matchup first prompt." },
+      }),
+      prisma.prompt.create({
+        data: { text: "A one-matchup second prompt." },
+      }),
+    ]);
+    let players: Awaited<ReturnType<typeof prisma.player.findMany>> = [];
+
+    try {
+      await prisma.room.create({
+        data: {
+          roomCode,
+          gameState: GameState.Prompting,
+          roundNumber: 2,
+          totalRounds: 2,
+          activePromptId: prompts[1].id,
+          roundStartedAt: new Date(),
+          usedPromptIds: prompts.map((prompt) => prompt.id),
+        },
+      });
+
+      players = await Promise.all(
+        ["OneAlpha", "OneBravo", "OneCharlie", "OneDelta"].map((nickname) =>
+          prisma.player.create({
+            data: { nickname, roomCode, points: 0 },
+          }),
+        ),
+      );
+
+      await prisma.response.createMany({
+        data: prompts.flatMap((prompt, promptIndex) =>
+          players.map((player, playerIndex) => ({
+            text: `Prompt ${promptIndex + 1} answer ${playerIndex + 1}`,
+            roomCode,
+            promptId: prompt.id,
+            playerId: player.id,
+          })),
+        ),
+      });
+
+      const transitionResponse = await request.post(
+        `/api/room/${roomCode}/transition`,
+      );
+      expect(transitionResponse.ok()).toBeTruthy();
+
+      const matchups = await prisma.matchup.findMany({
+        where: { roomCode },
+        orderBy: { matchupIndex: "asc" },
+      });
+
+      expect(matchups).toHaveLength(prompts.length);
+      expect(new Set(matchups.map((matchup) => matchup.promptId)).size).toBe(
+        prompts.length,
+      );
+      for (const matchup of matchups) {
+        expect(matchup.responseAId).toBeTruthy();
+        expect(matchup.responseBId).toBeTruthy();
+      }
+    } finally {
+      await prisma.room.deleteMany({ where: { roomCode } });
+      await prisma.prompt.deleteMany({
+        where: { id: { in: prompts.map((prompt) => prompt.id) } },
       });
     }
   });

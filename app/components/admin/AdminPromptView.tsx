@@ -70,7 +70,8 @@ export default function AdminPromptView({
   }, [roundStartedAt, timerLimitSeconds]);
 
   useEffect(() => {
-    const everyoneSubmitted = totalPlayers > 0 && submissionCount >= totalPlayers;
+    const everyoneSubmitted =
+      totalPlayers > 0 && submissionCount >= totalPlayers;
     const timerExpired = displayedTimeLeft <= 0;
 
     if ((!timerExpired && !everyoneSubmitted) || hasTransitionedRef.current) {
@@ -158,7 +159,7 @@ export default function AdminPromptView({
             QUESTION {currentRound} OF {totalRounds}
           </p>
           <h1 className="game-header text-4xl md:text-6xl text-white leading-tight">
-            &quot;{activePrompt?.text || "Prepare your answers!"}&quot;
+            {activePrompt?.text || "Prepare your answers!"}
           </h1>
         </section>
       </main>
@@ -178,7 +179,7 @@ export default function AdminPromptView({
             QUESTION {currentRound} OF {totalRounds}
           </span>
           <h1 className="game-header text-3xl md:text-5xl text-white leading-tight">
-            &quot;{activePrompt?.text || "Prepare your answers!"}&quot;
+            {activePrompt?.text || "Prepare your answers!"}
           </h1>
         </div>
 

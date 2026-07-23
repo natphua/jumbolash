@@ -261,25 +261,6 @@ export async function POST(
 
     const responsesForVoting = (allRoundResponses || []) as ResponseRecord[];
 
-    if (responsesForVoting.length < 2) {
-      const { error: updateError } = await supabaseAdmin
-        .from("Room")
-        .update({
-          gameState: GameState.Results,
-          votingStartedAt: null,
-          revealStartedAt: null,
-        })
-        .eq("roomCode", roomCode);
-
-      if (updateError) throw updateError;
-
-      return NextResponse.json({
-        ok: true,
-        gameState: GameState.Results,
-        matchupCount: 0,
-      });
-    }
-
     const { error: deleteMatchupsError } = await supabaseAdmin
       .from("Matchup")
       .delete()
@@ -296,19 +277,39 @@ export async function POST(
         responsesForVoting.filter((response) => response.promptId === promptId),
       );
 
-      for (let i = 0; i < promptResponses.length; i += 2) {
+      if (promptResponses.length >= 2) {
         matchups.push({
           id: randomUUID(),
           roomCode,
           promptId,
-          responseAId: promptResponses[i].id,
-          responseBId: promptResponses[i + 1]?.id || null,
+          responseAId: promptResponses[0].id,
+          responseBId: promptResponses[1].id,
           roundNumber: room.roundNumber,
           matchupIndex,
-          status: matchupIndex === 0 ? MatchupStatus.Active : MatchupStatus.Pending,
+          status:
+            matchupIndex === 0 ? MatchupStatus.Active : MatchupStatus.Pending,
         });
         matchupIndex += 1;
       }
+    }
+
+    if (matchups.length === 0) {
+      const { error: updateError } = await supabaseAdmin
+        .from("Room")
+        .update({
+          gameState: GameState.Results,
+          votingStartedAt: null,
+          revealStartedAt: null,
+        })
+        .eq("roomCode", roomCode);
+
+      if (updateError) throw updateError;
+
+      return NextResponse.json({
+        ok: true,
+        gameState: GameState.Results,
+        matchupCount: 0,
+      });
     }
 
     const { error: matchupError } = await supabaseAdmin

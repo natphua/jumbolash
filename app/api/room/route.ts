@@ -433,15 +433,28 @@ export async function DELETE(req: Request) {
       );
     }
 
-    const { error } = playerId
-      ? await supabaseAdmin
-          .from("Player")
-          .delete()
-          .eq("id", playerId)
-          .eq("roomCode", roomCode)
-      : await supabaseAdmin.from("Room").delete().eq("roomCode", roomCode);
+    if (playerId) {
+      const { error } = await supabaseAdmin
+        .from("Player")
+        .delete()
+        .eq("id", playerId)
+        .eq("roomCode", roomCode);
 
-    if (error) throw error;
+      if (error) throw error;
+    } else {
+      const cleanupSteps = [
+        supabaseAdmin.from("Vote").delete().eq("roomCode", roomCode),
+        supabaseAdmin.from("Matchup").delete().eq("roomCode", roomCode),
+        supabaseAdmin.from("Response").delete().eq("roomCode", roomCode),
+        supabaseAdmin.from("Player").delete().eq("roomCode", roomCode),
+        supabaseAdmin.from("Room").delete().eq("roomCode", roomCode),
+      ];
+
+      for (const cleanupStep of cleanupSteps) {
+        const { error } = await cleanupStep;
+        if (error) throw error;
+      }
+    }
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err: unknown) {

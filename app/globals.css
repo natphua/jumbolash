@@ -26,12 +26,15 @@
   filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 1));
 }
 
-.game-header {
-  font-family: "Rockwell", serif;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: #1e293b;
-  letter-spacing: 0.05em;
+/* Layer allows for overrides */
+@layer components {
+  .game-header {
+    font-family: "Rockwell", serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #1e293b; /* Default color */
+    letter-spacing: 0.05em;
+  }
 }
 
 .game-box-jagged {

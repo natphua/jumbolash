@@ -17,6 +17,7 @@ import LoadingScreen from "../../components/game/LoadingScreen";
 import PromptForm from "../../components/game/PromptForm";
 import VotingForm from "../../components/game/VotingForm";
 import LeaderboardView from "../../components/game/LeaderboardView";
+import LeaveRoomButton from "../../components/shared/LeaveRoomButton";
 
 interface Player {
   id: string;
@@ -254,11 +255,6 @@ export default function RoomPage() {
   }, [playerId, roomCode]);
 
   const handleLeaveRoom = async () => {
-    const confirmLeave = confirm(
-      "Are you sure you want to leave this game lobby?",
-    );
-    if (!confirmLeave) return;
-
     try {
       if (playerId) {
         isLeavingRef.current = true;
@@ -340,7 +336,11 @@ export default function RoomPage() {
 
   if (roomData.gameState === GameState.Results) {
     return (
-      <LeaderboardView players={roomData.leaderboard || roomData.players} />
+      <LeaderboardView
+        players={roomData.leaderboard || roomData.players}
+        confirmStatement="Are you sure you want to leave this game lobby?"
+        handleConfirm={handleLeaveRoom}
+      />
     );
   }
 
@@ -348,12 +348,10 @@ export default function RoomPage() {
   return (
     <main className="min-h-screen p-8 bg-slate-900 flex flex-col items-center justify-start font-sans relative">
       <div className="w-full max-w-3xl flex justify-start mb-4 mt-2">
-        <button
-          onClick={handleLeaveRoom}
-          className="game-box-jagged bg-rose-700 text-white px-5 py-2 text-sm cursor-pointer hover:bg-amber-700"
-        >
-          LEAVE ROOM
-        </button>
+        <LeaveRoomButton
+          confirmStatement="Are you sure you want to leave this game lobby?"
+          handleConfirm={handleLeaveRoom}
+        />
       </div>
 
       <div className="w-full max-w-3xl space-y-8">

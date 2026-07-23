@@ -20,6 +20,7 @@ import AdminPromptView from "../../components/admin/AdminPromptView";
 import AdminVotingView from "../../components/admin/AdminVotingView";
 import LoadingScreen from "../../components/game/LoadingScreen";
 import LeaderboardView from "../../components/game/LeaderboardView";
+import LeaveRoomButton from "../../components/shared/LeaveRoomButton";
 
 interface Player {
   id: string;
@@ -369,11 +370,6 @@ export default function AdminDashboard() {
   const handleEndRoom = async () => {
     if (!roomCode) return;
 
-    const confirmEnd = confirm(
-      "Are you sure you want to end this game session? All players will be disconnected.",
-    );
-    if (!confirmEnd) return;
-
     try {
       const response = await fetch(`/api/room?code=${roomCode}`, {
         method: "DELETE",
@@ -453,7 +449,12 @@ export default function AdminDashboard() {
 
   if (gameState === GameState.Results) {
     return (
-      <LeaderboardView players={leaderboard.length ? leaderboard : players} />
+      <LeaderboardView
+        players={leaderboard.length ? leaderboard : players}
+        leaveButtonText="END ROOM"
+        confirmStatement="Are you sure you want to end this game session? All players will be disconnected."
+        handleConfirm={handleEndRoom}
+      />
     );
   }
 
@@ -461,12 +462,11 @@ export default function AdminDashboard() {
   return (
     <main className="min-h-screen p-8 bg-slate-900 text-slate-800 font-sans flex flex-col items-center justify-start relative">
       <div className="w-full max-w-6xl flex justify-start mb-4 mt-2">
-        <button
-          onClick={handleEndRoom}
-          className="game-box-jagged bg-rose-700 text-white px-5 py-2 text-sm cursor-pointer hover:bg-rose-800"
-        >
-          END ROOM
-        </button>
+        <LeaveRoomButton
+          text="END ROOM"
+          confirmStatement="Are you sure you want to end this game session? All players will be disconnected."
+          handleConfirm={handleEndRoom}
+        />
       </div>
 
       <div className="w-full max-w-6xl flex flex-col md:flex-row gap-8 items-start justify-center">

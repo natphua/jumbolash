@@ -10,6 +10,7 @@
 "use client";
 
 import Image from "next/image";
+import LeaveRoomButton from "../shared/LeaveRoomButton";
 
 interface LeaderboardPlayer {
   id: string;
@@ -19,9 +20,17 @@ interface LeaderboardPlayer {
 
 interface LeaderboardViewProps {
   players: LeaderboardPlayer[];
+  handleConfirm?: () => void | Promise<void>;
+  confirmStatement?: string;
+  leaveButtonText?: string;
 }
 
-export default function LeaderboardView({ players }: LeaderboardViewProps) {
+export default function LeaderboardView({
+  players,
+  handleConfirm,
+  confirmStatement,
+  leaveButtonText,
+}: LeaderboardViewProps) {
   return (
     <main className="relative min-h-screen overflow-hidden p-6 flex items-center justify-center">
       <Image
@@ -31,6 +40,15 @@ export default function LeaderboardView({ players }: LeaderboardViewProps) {
         sizes="100vw"
         className="object-cover -z-10"
       />
+
+      {handleConfirm && confirmStatement && (
+        <LeaveRoomButton
+          text={leaveButtonText}
+          confirmStatement={confirmStatement}
+          handleConfirm={handleConfirm}
+          className="absolute left-6 top-6 z-10"
+        />
+      )}
 
       <section className="w-full max-w-3xl game-dashboard-card space-y-5">
         <div className="text-center border-b-2 border-black pb-3">
