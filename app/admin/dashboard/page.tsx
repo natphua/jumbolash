@@ -18,6 +18,7 @@ import RoomSettingsPanel from "../../components/admin/RoomSettingsPanel";
 import AdminRosterPanel from "../../components/admin/AdminRosterPanel";
 import AdminPromptView from "../../components/admin/AdminPromptView";
 import AdminVotingView from "../../components/admin/AdminVotingView";
+import LoadingScreen from "../../components/game/LoadingScreen";
 import LeaderboardView from "../../components/game/LeaderboardView";
 
 interface Player {
@@ -420,19 +421,14 @@ export default function AdminDashboard() {
   };
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900 font-mono text-slate-400">
-        <p className="animate-pulse uppercase tracking-widest">
-          SYNCING HOST DASHBOARD...
-        </p>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   // Active Prompting Phase View for Admin
   if (gameState === GameState.Prompting && roomCode) {
     return (
       <AdminPromptView
+        key={activePrompt?.id || "prompting"}
         roomCode={roomCode}
         activePrompt={activePrompt}
         totalPlayers={players.length}

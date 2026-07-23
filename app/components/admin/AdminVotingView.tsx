@@ -13,6 +13,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { parseGameTimestamp, VOTING_SECONDS } from "@/lib/game-state";
+import LoadingScreen from "../game/LoadingScreen";
 
 interface VotingResponse {
   id: string;
@@ -84,13 +85,7 @@ export default function AdminVotingView({
   }, [roomCode, timeLeft]);
 
   if (!currentMatchup) {
-    return (
-      <main className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <p className="font-mono uppercase tracking-widest text-slate-400">
-          Loading voting matchup...
-        </p>
-      </main>
-    );
+    return <LoadingScreen />;
   }
 
   const responses = [currentMatchup.responseA, currentMatchup.responseB].filter(

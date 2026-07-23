@@ -16,10 +16,20 @@ export async function GET(
       );
     }
 
+    const promptId = req.nextUrl.searchParams.get("promptId");
+
+    if (!promptId) {
+      return NextResponse.json(
+        { error: "Prompt id is required." },
+        { status: 400 },
+      );
+    }
+
     const { count, error } = await supabaseAdmin
       .from("Response")
       .select("id", { count: "exact", head: true })
-      .eq("roomCode", roomCode);
+      .eq("roomCode", roomCode)
+      .eq("promptId", promptId);
 
     if (error) throw error;
 

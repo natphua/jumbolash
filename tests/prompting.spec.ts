@@ -38,10 +38,12 @@ test.describe("Prompting Round Flow", () => {
   });
 
   test.afterEach(async () => {
-    await adminContext.close();
-    await playerOneContext.close();
-    await playerTwoContext.close();
-    await playerThreeContext.close();
+    await Promise.allSettled([
+      adminContext.close(),
+      playerOneContext.close(),
+      playerTwoContext.close(),
+      playerThreeContext.close(),
+    ]);
   });
 
   test("PR-1: player can submit an answer after admin launches a prompt", async () => {
@@ -233,13 +235,13 @@ test.describe("Prompting Round Flow", () => {
       await expect(roundsInput).toHaveValue("1");
       await expect(timerInput).toHaveValue(String(configuredSeconds));
 
-      adminPage.once("dialog", async (dialog) => {
-        expect(dialog.message()).toContain(
-          "Match configurations updated successfully.",
-        );
-        await dialog.accept();
-      });
+      const settingsDialog = adminPage.waitForEvent("dialog");
       await adminPage.click("button:has-text('UPDATE GAME RULES')");
+      const dialog = await settingsDialog;
+      expect(dialog.message()).toContain(
+        "Match configurations updated successfully.",
+      );
+      await dialog.accept();
       await expect
         .poll(async () => {
           const room = await prisma.room.findUnique({ where: { roomCode } });
@@ -280,6 +282,84 @@ test.describe("Prompting Round Flow", () => {
       await prisma.prompt.deleteMany({ where: { id: prompt.id } });
     }
   });
+
+  test("PR-4: player answer form resets and unlocks on the next prompt round", async () => {
+    const prompts = await Promise.all([
+      prisma.prompt.create({
+        data: { text: "A first multi-round reset prompt." },
+      }),
+      prisma.prompt.create({
+        data: { text: "A second multi-round reset prompt." },
+      }),
+    ]);
+
+    let roomCode = "";
+
+    try {
+      await adminPage.goto("/");
+      await adminPage.click("button:has-text('HOST GAME (ADMIN)')");
+
+      await adminPage.waitForSelector("[data-testid='room-code-display']");
+      roomCode =
+        (
+          await adminPage
+            .locator("[data-testid='room-code-display']")
+            .textContent()
+        )?.trim() || "";
+      expect(roomCode).toHaveLength(4);
+
+      const roundsInput = adminPage.locator('input[type="number"]').first();
+      await roundsInput.fill("2");
+      await expect(roundsInput).toHaveValue("2");
+
+      const settingsDialog = adminPage.waitForEvent("dialog");
+      await adminPage.click("button:has-text('UPDATE GAME RULES')");
+      const dialog = await settingsDialog;
+      expect(dialog.message()).toContain(
+        "Match configurations updated successfully.",
+      );
+      await dialog.accept();
+
+      await joinRoom(playerOnePage, roomCode, "ResetPlayer1");
+      await joinRoom(playerTwoPage, roomCode, "ResetPlayer2");
+      await joinRoom(playerThreePage, roomCode, "ResetPlayer3");
+
+      await expect(adminPage.locator("text=ResetPlayer3")).toBeVisible({
+        timeout: 7000,
+      });
+      await adminPage.click("button:has-text('LAUNCH MATCH')");
+
+      await expect(
+        playerOnePage.locator("button:has-text('SUBMIT ANSWER')"),
+      ).toBeVisible({ timeout: 7000 });
+
+      await submitPromptAnswer(playerOnePage, "Round one answer from one.");
+      await submitPromptAnswer(playerTwoPage, "Round one answer from two.");
+      await submitPromptAnswer(playerThreePage, "Round one answer from three.");
+
+      await expect(adminPage.locator("text=QUESTION 2 OF 2")).toBeVisible({
+        timeout: 10000,
+      });
+      await expect(
+        playerOnePage.locator("button:has-text('SUBMIT ANSWER')"),
+      ).toBeVisible({ timeout: 10000 });
+      await expect(playerOnePage.locator("textarea")).toBeEnabled();
+      await expect(playerOnePage.locator("textarea")).toHaveValue("");
+
+      await submitPromptAnswer(playerOnePage, "Round two answer from one.");
+      await expect(
+        playerOnePage.locator("text=SUBMISSION RECEIVED"),
+      ).toBeVisible({ timeout: 7000 });
+    } finally {
+      if (roomCode) {
+        await prisma.room.deleteMany({ where: { roomCode } });
+      }
+
+      await prisma.prompt.deleteMany({
+        where: { id: { in: prompts.map((prompt) => prompt.id) } },
+      });
+    }
+  });
 });
 
 async function joinRoom(page: Page, roomCode: string, nickname: string) {
@@ -296,4 +376,9 @@ async function readTimerSeconds(locator: Locator) {
   const seconds = Number(text.match(/\d+/)?.[0] || Number.NaN);
   expect(Number.isFinite(seconds)).toBeTruthy();
   return seconds;
+}
+
+async function submitPromptAnswer(page: Page, answer: string) {
+  await page.locator("textarea").fill(answer);
+  await page.click("button:has-text('SUBMIT ANSWER')");
 }

@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/supabase/client";
 import { GameState } from "@/lib/game-state";
+import LoadingScreen from "../../components/game/LoadingScreen";
 import PromptForm from "../../components/game/PromptForm";
 import VotingForm from "../../components/game/VotingForm";
 import LeaderboardView from "../../components/game/LeaderboardView";
@@ -286,13 +287,7 @@ export default function RoomPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900 font-mono text-slate-400">
-        <p className="animate-pulse uppercase tracking-widest">
-          SYNCING WITH LOBBY...
-        </p>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (error || !roomData) {
@@ -316,6 +311,7 @@ export default function RoomPage() {
     return (
       <main className="min-h-screen p-8 bg-slate-900 flex flex-col items-center justify-start font-sans relative">
         <PromptForm
+          key={roomData.activePrompt?.id || "prompting"}
           roomCode={roomData.roomCode}
           promptText={roomData.activePrompt?.text || "Prepare your answer!"}
           promptId={roomData.activePrompt?.id || ""}
@@ -338,7 +334,9 @@ export default function RoomPage() {
   }
 
   if (roomData.gameState === GameState.Results) {
-    return <LeaderboardView players={roomData.leaderboard || roomData.players} />;
+    return (
+      <LeaderboardView players={roomData.leaderboard || roomData.players} />
+    );
   }
 
   // Default Waiting Lobby View
@@ -347,7 +345,7 @@ export default function RoomPage() {
       <div className="w-full max-w-3xl flex justify-start mb-4 mt-2">
         <button
           onClick={handleLeaveRoom}
-          className="game-box-jagged bg-amber-600 text-white px-5 py-2 text-sm cursor-pointer hover:bg-amber-700"
+          className="game-box-jagged bg-rose-700 text-white px-5 py-2 text-sm cursor-pointer hover:bg-amber-700"
         >
           LEAVE ROOM
         </button>

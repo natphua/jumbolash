@@ -46,10 +46,6 @@ export default function AdminPromptView({
   const hasTransitionedRef = useRef(false);
 
   useEffect(() => {
-    hasTransitionedRef.current = false;
-  }, [roomCode, activePrompt?.id]);
-
-  useEffect(() => {
     if (!roundStartedAt) return;
 
     const calculateRemaining = () => {
@@ -86,10 +82,12 @@ export default function AdminPromptView({
   }, [displayedTimeLeft, roomCode, submissionCount, totalPlayers]);
 
   useEffect(() => {
-    if (!roomCode) return;
+    if (!roomCode || !activePrompt?.id) return;
 
     const fetchResponseCount = async () => {
-      const response = await fetch(`/api/room/${roomCode}/responses/count`);
+      const response = await fetch(
+        `/api/room/${roomCode}/responses/count?promptId=${activePrompt.id}`,
+      );
       const data = await response.json();
 
       if (!response.ok) {
@@ -113,10 +111,12 @@ export default function AdminPromptView({
           table: "Response",
           filter: `roomCode=eq.${roomCode}`,
         },
-        () => {
-          setSubmissionCount((prev) => prev + 1);
+        (payload) => {
+          if (payload.new.promptId !== activePrompt.id) return;
+
           setIsCounterPulsing(true);
           setTimeout(() => setIsCounterPulsing(false), 600);
+          fetchResponseCount();
         },
       )
       .subscribe();
@@ -127,7 +127,7 @@ export default function AdminPromptView({
       window.clearInterval(fallbackRefresh);
       supabase.removeChannel(responseChannel);
     };
-  }, [roomCode]);
+  }, [activePrompt?.id, roomCode]);
 
   return (
     <main className="min-h-screen p-8 bg-slate-900 text-slate-100 flex flex-col items-center justify-between font-sans relative">
