@@ -443,6 +443,7 @@ export default function AdminDashboard() {
   if (gameState === GameState.Voting && roomCode) {
     return (
       <AdminVotingView
+        key={currentMatchup?.id || "voting"}
         roomCode={roomCode}
         currentMatchup={currentMatchup}
         votingStartedAt={votingStartedAt}

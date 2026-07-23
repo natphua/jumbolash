@@ -91,7 +91,7 @@ test.describe("Prompting Round Flow", () => {
       await expect(
         playerOnePage.locator("text=SUBMIT YOUR ANSWER"),
       ).toBeVisible({
-        timeout: 7000,
+        timeout: 12000,
       });
 
       await playerOnePage
@@ -161,10 +161,10 @@ test.describe("Prompting Round Flow", () => {
 
       await expect(
         sameBrowserPlayerOne.locator("text=SUBMIT ANSWER"),
-      ).toBeVisible({ timeout: 7000 });
+      ).toBeVisible({ timeout: 12000 });
       await expect(
         sameBrowserPlayerTwo.locator("text=SUBMIT ANSWER"),
-      ).toBeVisible({ timeout: 7000 });
+      ).toBeVisible({ timeout: 12000 });
 
       await sameBrowserPlayerOne
         .locator("textarea")
@@ -264,8 +264,8 @@ test.describe("Prompting Round Flow", () => {
         "[data-testid='player-prompt-timer']",
       );
 
-      await expect(adminTimer).toBeVisible({ timeout: 7000 });
-      await expect(playerTimer).toBeVisible({ timeout: 7000 });
+      await expect(adminTimer).toBeVisible({ timeout: 12000 });
+      await expect(playerTimer).toBeVisible({ timeout: 12000 });
 
       const adminSeconds = await readTimerSeconds(adminTimer);
       const playerSeconds = await readTimerSeconds(playerTimer);
@@ -331,7 +331,7 @@ test.describe("Prompting Round Flow", () => {
 
       await expect(
         playerOnePage.locator("button:has-text('SUBMIT ANSWER')"),
-      ).toBeVisible({ timeout: 7000 });
+      ).toBeVisible({ timeout: 12000 });
 
       await submitPromptAnswer(playerOnePage, "Round one answer from one.");
       await submitPromptAnswer(playerTwoPage, "Round one answer from two.");
@@ -342,7 +342,7 @@ test.describe("Prompting Round Flow", () => {
       });
       await expect(
         playerOnePage.locator("button:has-text('SUBMIT ANSWER')"),
-      ).toBeVisible({ timeout: 10000 });
+      ).toBeVisible({ timeout: 12000 });
       await expect(playerOnePage.locator("textarea")).toBeEnabled();
       await expect(playerOnePage.locator("textarea")).toHaveValue("");
 

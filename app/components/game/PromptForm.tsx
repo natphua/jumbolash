@@ -19,6 +19,8 @@ interface PromptFormProps {
   timerLimit: number;
   roundStartedAt: string | null;
   playerId: string | null;
+  currentRound: number;
+  totalRounds: number;
 }
 
 export default function PromptForm({
@@ -28,6 +30,8 @@ export default function PromptForm({
   timerLimit,
   roundStartedAt,
   playerId,
+  currentRound,
+  totalRounds,
 }: PromptFormProps) {
   const timerLimitSeconds = timerLimit;
   const [answer, setAnswer] = useState("");
@@ -35,8 +39,17 @@ export default function PromptForm({
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showQuestionReveal, setShowQuestionReveal] = useState(true);
   const displayedTimeLeft = roundStartedAt ? timeLeft : timerLimitSeconds;
   const hasTransitionedRef = useRef(false);
+
+  useEffect(() => {
+    const revealTimer = window.setTimeout(() => {
+      setShowQuestionReveal(false);
+    }, 5000);
+
+    return () => window.clearTimeout(revealTimer);
+  }, []);
 
   // Synchronized countdown calculation
   useEffect(() => {
@@ -114,6 +127,19 @@ export default function PromptForm({
   };
 
   const isLocked = isSubmitted || displayedTimeLeft === 0 || submitting;
+
+  if (showQuestionReveal) {
+    return (
+      <div className="w-full max-w-4xl min-h-[70vh] flex flex-col items-center justify-center text-center">
+        <p className="font-mono text-2xl md:text-4xl font-black uppercase tracking-widest text-amber-400 mb-12">
+          QUESTION {currentRound} OF {totalRounds}
+        </p>
+        <h1 className="game-header text-4xl md:text-6xl text-white leading-tight">
+          &quot;{promptText || "Prepare your answer!"}&quot;
+        </h1>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-3xl space-y-6">

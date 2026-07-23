@@ -42,8 +42,17 @@ export default function AdminPromptView({
   const [submissionCount, setSubmissionCount] = useState<number>(0);
   const [isCounterPulsing, setIsCounterPulsing] = useState<boolean>(false);
   const [timeLeft, setTimeLeft] = useState<number>(timerLimitSeconds);
+  const [showQuestionReveal, setShowQuestionReveal] = useState(true);
   const displayedTimeLeft = roundStartedAt ? timeLeft : timerLimitSeconds;
   const hasTransitionedRef = useRef(false);
+
+  useEffect(() => {
+    const revealTimer = window.setTimeout(() => {
+      setShowQuestionReveal(false);
+    }, 5000);
+
+    return () => window.clearTimeout(revealTimer);
+  }, []);
 
   useEffect(() => {
     if (!roundStartedAt) return;
@@ -129,17 +138,37 @@ export default function AdminPromptView({
     };
   }, [activePrompt?.id, roomCode]);
 
+  const header = (
+    <div className="w-full max-w-5xl flex justify-between items-center border-b-2 border-slate-700 pb-4">
+      <span className="font-mono text-sm tracking-widest text-slate-400">
+        ROOM CODE: <strong className="text-amber-400">{roomCode}</strong>
+      </span>
+      <span className="game-badge bg-emerald-600 text-white font-mono uppercase">
+        PHASE: PROMPTING
+      </span>
+    </div>
+  );
+
+  if (showQuestionReveal) {
+    return (
+      <main className="min-h-screen p-8 bg-slate-900 text-slate-100 flex flex-col items-center font-sans relative">
+        {header}
+        <section className="flex flex-1 w-full max-w-5xl flex-col items-center justify-center text-center">
+          <p className="font-mono text-3xl md:text-5xl font-black uppercase tracking-widest text-amber-400 mb-14">
+            QUESTION {currentRound} OF {totalRounds}
+          </p>
+          <h1 className="game-header text-4xl md:text-6xl text-white leading-tight">
+            &quot;{activePrompt?.text || "Prepare your answers!"}&quot;
+          </h1>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen p-8 bg-slate-900 text-slate-100 flex flex-col items-center justify-between font-sans relative">
       {/* Top Header Bar */}
-      <div className="w-full max-w-5xl flex justify-between items-center border-b-2 border-slate-700 pb-4">
-        <span className="font-mono text-sm tracking-widest text-slate-400">
-          ROOM CODE: <strong className="text-amber-400">{roomCode}</strong>
-        </span>
-        <span className="game-badge bg-emerald-600 text-white font-mono uppercase">
-          PHASE: PROMPTING
-        </span>
-      </div>
+      {header}
 
       {/* Main Content Area */}
       <div className="w-full max-w-4xl flex flex-col items-center text-center my-auto space-y-8">

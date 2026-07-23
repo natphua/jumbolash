@@ -258,6 +258,15 @@ export async function GET(req: Request) {
       if (matchupError) throw matchupError;
 
       if (matchup) {
+        const { data: matchupPrompt, error: matchupPromptError } =
+          await supabaseAdmin
+            .from("Prompt")
+            .select("id, text")
+            .eq("id", matchup.promptId)
+            .maybeSingle();
+
+        if (matchupPromptError) throw matchupPromptError;
+
         const responseIds = [matchup.responseAId, matchup.responseBId].filter(
           Boolean,
         ) as string[];
@@ -319,7 +328,7 @@ export async function GET(req: Request) {
 
         currentMatchup = {
           ...matchup,
-          prompt: activePrompt,
+          prompt: matchupPrompt || activePrompt,
           responseA,
           responseB,
           votes: matchupVotes,

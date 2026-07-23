@@ -28,6 +28,8 @@ interface RoomData {
   roomCode: string;
   gameState: string;
   timerLimit: number;
+  roundNumber: number;
+  totalRounds: number;
   roundStartedAt: string | null;
   activePrompt?: {
     id: string;
@@ -318,6 +320,8 @@ export default function RoomPage() {
           timerLimit={roomData.timerLimit || 90}
           roundStartedAt={roomData.roundStartedAt}
           playerId={playerId}
+          currentRound={roomData.roundNumber || 1}
+          totalRounds={roomData.totalRounds || 1}
         />
       </main>
     );
@@ -326,6 +330,7 @@ export default function RoomPage() {
   if (roomData.gameState === GameState.Voting && roomData.currentMatchup) {
     return (
       <VotingForm
+        key={roomData.currentMatchup.id}
         roomCode={roomData.roomCode}
         matchup={roomData.currentMatchup}
         playerId={playerId}

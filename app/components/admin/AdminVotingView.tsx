@@ -108,7 +108,7 @@ export default function AdminVotingView({
         sizes="100vw"
         className="object-cover -z-10"
       />
-      <div className="w-full max-w-5xl flex justify-between items-center border-b-2 border-slate-700 pb-4">
+      <div className="w-full max-w-5xl flex justify-between items-center border-b-2 border-slate-100 pb-4">
         <span className="font-mono text-sm tracking-widest text-slate-400">
           ROOM CODE: <strong className="text-amber-400">{roomCode}</strong>
         </span>
@@ -132,7 +132,7 @@ export default function AdminVotingView({
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-5xl">
-        {responses.map((response) => {
+        {responses.map((response, index) => {
           const isWinner =
             isRevealReady &&
             highestVoteCount > 0 &&
@@ -141,7 +141,9 @@ export default function AdminVotingView({
           return (
             <article
               key={response.id}
-              className={`game-chat-bubble ${isWinner ? "is-winning" : ""}`}
+              className={`game-chat-bubble ${
+                index === 1 ? "game-chat-bubble-right" : "game-chat-bubble-left"
+              } ${isWinner ? "is-winning" : ""}`}
             >
               <p className="text-xl font-mono text-slate-900">
                 {response.text}
