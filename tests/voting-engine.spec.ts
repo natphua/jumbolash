@@ -28,8 +28,10 @@ test.describe("Voting Engine", () => {
         data: {
           roomCode,
           gameState: GameState.Prompting,
+          totalRounds: 1,
           activePromptId: prompt.id,
           roundStartedAt: new Date(),
+          usedPromptIds: [prompt.id],
         },
       });
 
@@ -125,6 +127,78 @@ test.describe("Voting Engine", () => {
     } finally {
       await prisma.room.deleteMany({ where: { roomCode } });
       await prisma.prompt.deleteMany({ where: { id: prompt.id } });
+    }
+  });
+
+  test("VE-2: transition starts the next prompt before voting until all rounds are answered", async ({
+    request,
+  }) => {
+    const roomCode = `N${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+    const firstPrompt = await prisma.prompt.create({
+      data: { text: "A first round prompt before voting." },
+    });
+    const secondPrompt = await prisma.prompt.create({
+      data: { text: "A second round prompt before voting." },
+    });
+    let players: Awaited<ReturnType<typeof prisma.player.findMany>> = [];
+
+    try {
+      await prisma.room.create({
+        data: {
+          roomCode,
+          gameState: GameState.Prompting,
+          roundNumber: 1,
+          totalRounds: 2,
+          activePromptId: firstPrompt.id,
+          roundStartedAt: new Date(),
+          usedPromptIds: [firstPrompt.id],
+        },
+      });
+
+      players = await Promise.all([
+        prisma.player.create({
+          data: { nickname: "NextAlpha", roomCode, points: 0 },
+        }),
+        prisma.player.create({
+          data: { nickname: "NextBravo", roomCode, points: 0 },
+        }),
+        prisma.player.create({
+          data: { nickname: "NextCharlie", roomCode, points: 0 },
+        }),
+      ]);
+
+      await prisma.response.createMany({
+        data: players.map((player, index) => ({
+          text: `Round one answer ${index + 1}`,
+          roomCode,
+          promptId: firstPrompt.id,
+          playerId: player.id,
+        })),
+      });
+
+      const transitionResponse = await request.post(
+        `/api/room/${roomCode}/transition`,
+      );
+      expect(transitionResponse.ok()).toBeTruthy();
+
+      const roomAfterTransition = await prisma.room.findUniqueOrThrow({
+        where: { roomCode },
+      });
+      expect(roomAfterTransition.gameState).toBe(GameState.Prompting);
+      expect(roomAfterTransition.roundNumber).toBe(2);
+      expect(roomAfterTransition.activePromptId).not.toBe(firstPrompt.id);
+      expect(roomAfterTransition.usedPromptIds).toContain(firstPrompt.id);
+      expect(roomAfterTransition.usedPromptIds).toContain(
+        roomAfterTransition.activePromptId!,
+      );
+
+      const matchups = await prisma.matchup.findMany({ where: { roomCode } });
+      expect(matchups).toHaveLength(0);
+    } finally {
+      await prisma.room.deleteMany({ where: { roomCode } });
+      await prisma.prompt.deleteMany({
+        where: { id: { in: [firstPrompt.id, secondPrompt.id] } },
+      });
     }
   });
 });

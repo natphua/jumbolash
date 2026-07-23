@@ -64,6 +64,13 @@ export async function POST(
       );
     }
 
+    if (room.timerLimit < 30 || room.timerLimit > 120) {
+      return NextResponse.json(
+        { error: "Room timer must be stored in seconds between 30 and 120." },
+        { status: 400 },
+      );
+    }
+
     // 2. Fetch a random prompt from the database
     const { count: totalPrompts, error: countError } = await supabaseAdmin
       .from("Prompt")

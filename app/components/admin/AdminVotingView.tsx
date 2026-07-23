@@ -10,8 +10,9 @@
 
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { VOTING_SECONDS } from "@/lib/game-state";
+import { parseGameTimestamp, VOTING_SECONDS } from "@/lib/game-state";
 
 interface VotingResponse {
   id: string;
@@ -55,7 +56,7 @@ export default function AdminVotingView({
     if (!votingStartedAt) return;
 
     const calculateRemaining = () => {
-      const start = new Date(votingStartedAt).getTime();
+      const start = parseGameTimestamp(votingStartedAt);
       const elapsedSeconds = Math.floor((Date.now() - start) / 1000);
       setTimeLeft(Math.max(0, VOTING_SECONDS - elapsedSeconds));
     };
@@ -99,9 +100,19 @@ export default function AdminVotingView({
     ...responses.map((response) => response.voteCount),
     0,
   );
+  const isRevealReady =
+    currentMatchup.eligibleVoteCount > 0 &&
+    currentMatchup.submittedVoteCount >= currentMatchup.eligibleVoteCount;
 
   return (
-    <main className="min-h-screen p-8 bg-slate-900 text-slate-100 flex flex-col items-center gap-8">
+    <main className="relative min-h-screen overflow-hidden p-8 text-slate-100 flex flex-col items-center gap-8">
+      <Image
+        src="/backgrounds/purple-bg.png"
+        alt=""
+        fill
+        sizes="100vw"
+        className="object-cover -z-10"
+      />
       <div className="w-full max-w-5xl flex justify-between items-center border-b-2 border-slate-700 pb-4">
         <span className="font-mono text-sm tracking-widest text-slate-400">
           ROOM CODE: <strong className="text-amber-400">{roomCode}</strong>
@@ -128,7 +139,9 @@ export default function AdminVotingView({
       <section className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-5xl">
         {responses.map((response) => {
           const isWinner =
-            highestVoteCount > 0 && response.voteCount === highestVoteCount;
+            isRevealReady &&
+            highestVoteCount > 0 &&
+            response.voteCount === highestVoteCount;
 
           return (
             <article
@@ -138,19 +151,27 @@ export default function AdminVotingView({
               <p className="text-xl font-mono text-slate-900">
                 {response.text}
               </p>
-              <div className="game-author-reveal">
-                {response.authorNickname}
-              </div>
-              <div className="game-voter-row">
-                {response.voters.map((voter) => (
-                  <span key={voter.playerId} className="game-voter-tag">
-                    {voter.nickname}
-                  </span>
-                ))}
-                <span className="game-vote-count-badge">
-                  {response.voteCount}
-                </span>
-              </div>
+              {isRevealReady ? (
+                <>
+                  <div className="game-author-reveal">
+                    {response.authorNickname}
+                  </div>
+                  <div className="game-voter-row">
+                    {response.voters.map((voter) => (
+                      <span key={voter.playerId} className="game-voter-tag">
+                        {voter.nickname}
+                      </span>
+                    ))}
+                    <span className="game-vote-count-badge">
+                      {response.voteCount}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-5 font-mono text-sm uppercase tracking-wider text-slate-700">
+                  Authors hidden until voting closes
+                </p>
+              )}
             </article>
           );
         })}

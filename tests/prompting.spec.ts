@@ -8,10 +8,12 @@
  * Created on 2026-07-20 by Natalie Phua.
  */
 
-import { test, expect, BrowserContext, Page } from "@playwright/test";
+import { test, expect, BrowserContext, Locator, Page } from "@playwright/test";
 import { prisma } from "../lib/prisma";
 
 test.describe("Prompting Round Flow", () => {
+  test.describe.configure({ mode: "serial" });
+
   let adminContext: BrowserContext;
   let adminPage: Page;
   let playerOneContext: BrowserContext;
@@ -202,6 +204,82 @@ test.describe("Prompting Round Flow", () => {
       await prisma.prompt.deleteMany({ where: { id: prompt.id } });
     }
   });
+
+  test("PR-3: saved timer setting renders as seconds on admin and player prompt screens", async () => {
+    const prompt = await prisma.prompt.create({
+      data: { text: "A timer settings regression prompt." },
+    });
+
+    let roomCode = "";
+    const configuredSeconds = 45;
+
+    try {
+      await adminPage.goto("/");
+      await adminPage.click("button:has-text('HOST GAME (ADMIN)')");
+
+      await adminPage.waitForSelector("[data-testid='room-code-display']");
+      roomCode =
+        (
+          await adminPage
+            .locator("[data-testid='room-code-display']")
+            .textContent()
+        )?.trim() || "";
+      expect(roomCode).toHaveLength(4);
+
+      const roundsInput = adminPage.locator('input[type="number"]').first();
+      const timerInput = adminPage.locator('input[type="number"]').last();
+      await roundsInput.fill("1");
+      await timerInput.fill(String(configuredSeconds));
+      await expect(roundsInput).toHaveValue("1");
+      await expect(timerInput).toHaveValue(String(configuredSeconds));
+
+      adminPage.once("dialog", async (dialog) => {
+        expect(dialog.message()).toContain(
+          "Match configurations updated successfully.",
+        );
+        await dialog.accept();
+      });
+      await adminPage.click("button:has-text('UPDATE GAME RULES')");
+      await expect
+        .poll(async () => {
+          const room = await prisma.room.findUnique({ where: { roomCode } });
+          return room?.timerLimit;
+        })
+        .toBe(configuredSeconds);
+
+      await joinRoom(playerOnePage, roomCode, "TimerPlayer1");
+      await joinRoom(playerTwoPage, roomCode, "TimerPlayer2");
+      await joinRoom(playerThreePage, roomCode, "TimerPlayer3");
+
+      await expect(adminPage.locator("text=TimerPlayer3")).toBeVisible({
+        timeout: 7000,
+      });
+
+      await adminPage.click("button:has-text('LAUNCH MATCH')");
+
+      const adminTimer = adminPage.locator("[data-testid='admin-prompt-timer']");
+      const playerTimer = playerOnePage.locator(
+        "[data-testid='player-prompt-timer']",
+      );
+
+      await expect(adminTimer).toBeVisible({ timeout: 7000 });
+      await expect(playerTimer).toBeVisible({ timeout: 7000 });
+
+      const adminSeconds = await readTimerSeconds(adminTimer);
+      const playerSeconds = await readTimerSeconds(playerTimer);
+
+      expect(adminSeconds).toBeGreaterThan(0);
+      expect(playerSeconds).toBeGreaterThan(0);
+      expect(adminSeconds).toBeLessThanOrEqual(configuredSeconds);
+      expect(playerSeconds).toBeLessThanOrEqual(configuredSeconds);
+    } finally {
+      if (roomCode) {
+        await prisma.room.deleteMany({ where: { roomCode } });
+      }
+
+      await prisma.prompt.deleteMany({ where: { id: prompt.id } });
+    }
+  });
 });
 
 async function joinRoom(page: Page, roomCode: string, nickname: string) {
@@ -211,4 +289,11 @@ async function joinRoom(page: Page, roomCode: string, nickname: string) {
   await page.fill('input[placeholder*="NICKNAME"]', nickname);
   await page.click("button:has-text('ENTER ROOM')");
   await page.waitForURL(`**/room/${roomCode}`, { timeout: 7000 });
+}
+
+async function readTimerSeconds(locator: Locator) {
+  const text = (await locator.textContent()) || "";
+  const seconds = Number(text.match(/\d+/)?.[0] || Number.NaN);
+  expect(Number.isFinite(seconds)).toBeTruthy();
+  return seconds;
 }

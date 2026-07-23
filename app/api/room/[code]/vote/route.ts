@@ -37,8 +37,6 @@ interface ResponseRecord {
 
 interface RoomRecord {
   roundNumber: number;
-  totalRounds: number;
-  usedPromptIds: string[];
 }
 
 async function advanceMatchup(
@@ -67,42 +65,6 @@ async function advanceMatchup(
   if (completeError) throw completeError;
 
   if (!nextMatchup) {
-    if (room.roundNumber < room.totalRounds) {
-      const { data: prompts, error: promptsError } = await supabaseAdmin
-        .from("Prompt")
-        .select("id, text");
-
-      if (promptsError) throw promptsError;
-
-      const usedPromptIds = room.usedPromptIds || [];
-      const usedPromptSet = new Set(usedPromptIds);
-      const availablePrompts = (prompts || []).filter(
-        (prompt) => !usedPromptSet.has(prompt.id),
-      );
-
-      if (availablePrompts.length > 0) {
-        const nextPrompt =
-          availablePrompts[Math.floor(Math.random() * availablePrompts.length)];
-
-        const { error } = await supabaseAdmin
-          .from("Room")
-          .update({
-            gameState: GameState.Prompting,
-            roundNumber: room.roundNumber + 1,
-            activePromptId: nextPrompt.id,
-            roundStartedAt: new Date().toISOString(),
-            activeMatchupIndex: 0,
-            votingStartedAt: null,
-            revealStartedAt: null,
-            usedPromptIds: [...usedPromptIds, nextPrompt.id],
-          })
-          .eq("roomCode", roomCode);
-
-        if (error) throw error;
-        return GameState.Prompting;
-      }
-    }
-
     const { error } = await supabaseAdmin
       .from("Room")
       .update({

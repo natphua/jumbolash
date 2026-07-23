@@ -13,7 +13,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/supabase/client";
-import { GameState, normalizeTimerLimitSeconds } from "@/lib/game-state";
+import { GameState } from "@/lib/game-state";
 import RoomSettingsPanel from "../../components/admin/RoomSettingsPanel";
 import AdminRosterPanel from "../../components/admin/AdminRosterPanel";
 import AdminPromptView from "../../components/admin/AdminPromptView";
@@ -125,7 +125,7 @@ export default function AdminDashboard() {
         if (roomData.roundNumber) {
           setCurrentRound(roomData.roundNumber);
         }
-        setTimer(String(normalizeTimerLimitSeconds(roomData.timerLimit)));
+        setTimer(String(roomData.timerLimit));
         setGameState(roomData.gameState);
         setRoundStartedAt(roomData.roundStartedAt);
         setActivePrompt(roomData.activePrompt);
@@ -169,7 +169,7 @@ export default function AdminDashboard() {
         setLeaderboard(roomData.leaderboard || roomData.players || []);
 
         if (roomData.gameState === "PROMPTING") {
-          setTimer(String(normalizeTimerLimitSeconds(roomData.timerLimit)));
+          setTimer(String(roomData.timerLimit));
         }
       } catch (err) {
         console.error("Failed to refresh room snapshot:", err);
@@ -214,7 +214,7 @@ export default function AdminDashboard() {
           setRoundStartedAt(updated.roundStartedAt);
           setVotingStartedAt(updated.votingStartedAt);
           setCurrentRound(updated.roundNumber);
-          setTimer(String(normalizeTimerLimitSeconds(updated.timerLimit)));
+          setTimer(String(updated.timerLimit));
 
           if (
             updated.gameState === GameState.Prompting ||

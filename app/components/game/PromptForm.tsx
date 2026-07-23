@@ -10,7 +10,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { normalizeTimerLimitSeconds } from "@/lib/game-state";
+import { parseGameTimestamp } from "@/lib/game-state";
 
 interface PromptFormProps {
   roomCode: string;
@@ -29,7 +29,7 @@ export default function PromptForm({
   roundStartedAt,
   playerId,
 }: PromptFormProps) {
-  const timerLimitSeconds = normalizeTimerLimitSeconds(timerLimit);
+  const timerLimitSeconds = timerLimit;
   const [answer, setAnswer] = useState("");
   const [timeLeft, setTimeLeft] = useState<number>(timerLimitSeconds);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -43,7 +43,7 @@ export default function PromptForm({
     if (!roundStartedAt) return;
 
     const calculateRemaining = () => {
-      const start = new Date(roundStartedAt).getTime();
+      const start = parseGameTimestamp(roundStartedAt);
       const elapsedSeconds = Math.floor((Date.now() - start) / 1000);
       const remaining = Math.max(0, timerLimitSeconds - elapsedSeconds);
       setTimeLeft(remaining);
@@ -130,6 +130,7 @@ export default function PromptForm({
             TIME REMAINING
           </span>
           <span
+            data-testid="player-prompt-timer"
             className={`font-mono font-bold text-3xl px-3 py-1 border-2 border-black rounded ${
               displayedTimeLeft <= 10
                 ? "bg-rose-600 text-white animate-bounce"

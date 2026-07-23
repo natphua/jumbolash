@@ -12,7 +12,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/supabase/client";
-import { normalizeTimerLimitSeconds } from "@/lib/game-state";
+import { parseGameTimestamp } from "@/lib/game-state";
 
 interface ActivePrompt {
   id: string;
@@ -38,7 +38,7 @@ export default function AdminPromptView({
   currentRound,
   totalRounds,
 }: AdminPromptViewProps) {
-  const timerLimitSeconds = normalizeTimerLimitSeconds(timerLimit);
+  const timerLimitSeconds = timerLimit;
   const [submissionCount, setSubmissionCount] = useState<number>(0);
   const [isCounterPulsing, setIsCounterPulsing] = useState<boolean>(false);
   const [timeLeft, setTimeLeft] = useState<number>(timerLimitSeconds);
@@ -53,7 +53,7 @@ export default function AdminPromptView({
     if (!roundStartedAt) return;
 
     const calculateRemaining = () => {
-      const start = new Date(roundStartedAt).getTime();
+      const start = parseGameTimestamp(roundStartedAt);
       const elapsedSeconds = Math.floor((Date.now() - start) / 1000);
       setTimeLeft(Math.max(0, timerLimitSeconds - elapsedSeconds));
     };
@@ -161,6 +161,7 @@ export default function AdminPromptView({
               TIME REMAINING
             </span>
             <span
+              data-testid="admin-prompt-timer"
               className={`text-5xl font-mono font-black ${
                 displayedTimeLeft <= 10
                   ? "text-rose-500 animate-pulse"

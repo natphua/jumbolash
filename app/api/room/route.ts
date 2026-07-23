@@ -358,6 +358,28 @@ export async function PATCH(req: Request) {
       );
     }
 
+    if (
+      !Number.isInteger(totalRounds) ||
+      totalRounds < 1 ||
+      totalRounds > 10
+    ) {
+      return NextResponse.json(
+        { error: "Rounds must be between 1 and 10." },
+        { status: 400 },
+      );
+    }
+
+    if (
+      !Number.isInteger(timerLimit) ||
+      timerLimit < 30 ||
+      timerLimit > 120
+    ) {
+      return NextResponse.json(
+        { error: "Countdown timer must be between 30 and 120 seconds." },
+        { status: 400 },
+      );
+    }
+
     const { count: promptCount, error: promptCountError } = await supabaseAdmin
       .from("Prompt")
       .select("id", { count: "exact", head: true });

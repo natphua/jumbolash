@@ -25,7 +25,7 @@ export default function LeaderboardView({ players }: LeaderboardViewProps) {
   return (
     <main className="relative min-h-screen overflow-hidden p-6 flex items-center justify-center">
       <Image
-        src="/backgrounds/purple-bg.png"
+        src="/backgrounds/yellow-bg.jpg"
         alt=""
         fill
         sizes="100vw"

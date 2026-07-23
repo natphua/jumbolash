@@ -54,10 +54,7 @@ export default function VotingForm({
   const ownsMatchup = responses.some(
     (response) => response.playerId === playerId,
   );
-  const backgroundSrc =
-    matchup.matchupIndex % 2 === 0
-      ? "/backgrounds/purple-bg.png"
-      : "/backgrounds/yellow-bg.jpg";
+  const backgroundSrc = "/backgrounds/purple-bg.png";
 
   const submitVote = async (responseId: string) => {
     if (!playerId || ownsMatchup || submitting || hasVoted) return;
@@ -105,7 +102,7 @@ export default function VotingForm({
       <div className="w-full max-w-4xl space-y-6">
         <div className="game-dashboard-card text-center space-y-3">
           <span className="game-badge">PHASE: VOTING</span>
-          <h1 className="game-header text-2xl text-slate-900">
+          <h1 className="game-header mt-4 text-2xl text-slate-900">
             {matchup.prompt?.text || "Vote on the best answer"}
           </h1>
           <p className="font-mono text-sm uppercase tracking-wider text-slate-600">

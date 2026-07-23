@@ -30,12 +30,7 @@ export type MatchupStatusValue =
 export const VOTING_SECONDS = 20;
 export const POINTS_PER_VOTE = 100;
 
-export function normalizeTimerLimitSeconds(timerLimit: number) {
-  let normalized = timerLimit;
-
-  while (normalized > 120 && normalized >= 1000) {
-    normalized = Math.floor(normalized / 1000);
-  }
-
-  return normalized;
+export function parseGameTimestamp(timestamp: string) {
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(timestamp);
+  return new Date(hasTimezone ? timestamp : `${timestamp}Z`).getTime();
 }

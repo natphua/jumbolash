@@ -23,7 +23,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { supabaseAdmin } from "@/supabase/admin";
-import { GameState, normalizeTimerLimitSeconds } from "@/lib/game-state";
+import { GameState, parseGameTimestamp } from "@/lib/game-state";
 
 export async function POST(
   req: NextRequest,
@@ -99,9 +99,8 @@ export async function POST(
     }
 
     const serverNow = Date.now();
-    const roundStart = new Date(room.roundStartedAt).getTime();
-    const timerLimitSeconds = normalizeTimerLimitSeconds(room.timerLimit);
-    const timerLimitMs = timerLimitSeconds * 1000;
+    const roundStart = parseGameTimestamp(room.roundStartedAt);
+    const timerLimitMs = room.timerLimit * 1000;
     const allowedEndTime = roundStart + timerLimitMs;
 
     // Buffer window of 1.5 seconds to account for network latency

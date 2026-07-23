@@ -23,7 +23,7 @@ import { supabaseAdmin } from "@/supabase/admin";
 import {
   GameState,
   MatchupStatus,
-  normalizeTimerLimitSeconds,
+  parseGameTimestamp,
   VOTING_SECONDS,
 } from "@/lib/game-state";
 
@@ -57,7 +57,7 @@ async function advanceVotingMatchup(roomCode: string, room: RoomRecord) {
   }
 
   const elapsedSeconds = Math.floor(
-    (Date.now() - new Date(room.votingStartedAt).getTime()) / 1000,
+    (Date.now() - parseGameTimestamp(room.votingStartedAt)) / 1000,
   );
 
   if (elapsedSeconds < VOTING_SECONDS) {
@@ -87,43 +87,6 @@ async function advanceVotingMatchup(roomCode: string, room: RoomRecord) {
   if (completeError) throw completeError;
 
   if (!nextMatchup) {
-    if (room.roundNumber < room.totalRounds) {
-      const { data: prompts, error: promptsError } = await supabaseAdmin
-        .from("Prompt")
-        .select("id, text");
-
-      if (promptsError) throw promptsError;
-
-      const usedPromptIds = room.usedPromptIds || [];
-      const usedPromptSet = new Set(usedPromptIds);
-      const availablePrompts = (prompts || []).filter(
-        (prompt) => !usedPromptSet.has(prompt.id),
-      );
-
-      if (availablePrompts.length > 0) {
-        const nextPrompt =
-          availablePrompts[Math.floor(Math.random() * availablePrompts.length)];
-
-        const { error } = await supabaseAdmin
-          .from("Room")
-          .update({
-            gameState: GameState.Prompting,
-            roundNumber: room.roundNumber + 1,
-            activePromptId: nextPrompt.id,
-            roundStartedAt: new Date().toISOString(),
-            votingStartedAt: null,
-            revealStartedAt: null,
-            activeMatchupIndex: 0,
-            usedPromptIds: [...usedPromptIds, nextPrompt.id],
-          })
-          .eq("roomCode", roomCode);
-
-        if (error) throw error;
-
-        return NextResponse.json({ ok: true, gameState: GameState.Prompting });
-      }
-    }
-
     const { error } = await supabaseAdmin
       .from("Room")
       .update({
@@ -157,6 +120,52 @@ async function advanceVotingMatchup(roomCode: string, room: RoomRecord) {
   if (roomError) throw roomError;
 
   return NextResponse.json({ ok: true, gameState: GameState.Voting });
+}
+
+async function startNextPromptRound(roomCode: string, room: RoomRecord) {
+  const { data: prompts, error: promptsError } = await supabaseAdmin
+    .from("Prompt")
+    .select("id, text");
+
+  if (promptsError) throw promptsError;
+
+  const usedPromptIds = room.usedPromptIds || [];
+  const usedPromptSet = new Set(usedPromptIds);
+  const availablePrompts = (prompts || []).filter(
+    (prompt) => !usedPromptSet.has(prompt.id),
+  );
+
+  if (availablePrompts.length === 0) {
+    return NextResponse.json(
+      { error: "No unused prompts remain for this room." },
+      { status: 400 },
+    );
+  }
+
+  const nextPrompt =
+    availablePrompts[Math.floor(Math.random() * availablePrompts.length)];
+
+  const { error } = await supabaseAdmin
+    .from("Room")
+    .update({
+      gameState: GameState.Prompting,
+      roundNumber: room.roundNumber + 1,
+      activePromptId: nextPrompt.id,
+      roundStartedAt: new Date().toISOString(),
+      activeMatchupIndex: 0,
+      votingStartedAt: null,
+      revealStartedAt: null,
+      usedPromptIds: [...usedPromptIds, nextPrompt.id],
+    })
+    .eq("roomCode", roomCode);
+
+  if (error) throw error;
+
+  return NextResponse.json({
+    ok: true,
+    gameState: GameState.Prompting,
+    activePrompt: nextPrompt,
+  });
 }
 
 export async function POST(
@@ -218,12 +227,11 @@ export async function POST(
 
     const submittedResponses = (responses || []) as ResponseRecord[];
     const totalPlayers = players?.length || 0;
-    const timerLimitSeconds = normalizeTimerLimitSeconds(room.timerLimit);
     const roundStartedAt = room.roundStartedAt
-      ? new Date(room.roundStartedAt).getTime()
+      ? parseGameTimestamp(room.roundStartedAt)
       : null;
     const timerExpired = roundStartedAt
-      ? Date.now() >= roundStartedAt + timerLimitSeconds * 1000
+      ? Date.now() >= roundStartedAt + room.timerLimit * 1000
       : false;
     const everyoneSubmitted =
       totalPlayers > 0 && submittedResponses.length >= totalPlayers;
@@ -238,7 +246,22 @@ export async function POST(
       );
     }
 
-    if (submittedResponses.length < 2) {
+    if (room.roundNumber < room.totalRounds) {
+      return startNextPromptRound(roomCode, room);
+    }
+
+    const { data: allRoundResponses, error: allResponsesError } =
+      await supabaseAdmin
+        .from("Response")
+        .select("id, roomCode, playerId, promptId")
+        .eq("roomCode", roomCode)
+        .in("promptId", room.usedPromptIds || [room.activePromptId]);
+
+    if (allResponsesError) throw allResponsesError;
+
+    const responsesForVoting = (allRoundResponses || []) as ResponseRecord[];
+
+    if (responsesForVoting.length < 2) {
       const { error: updateError } = await supabaseAdmin
         .from("Room")
         .update({
@@ -260,25 +283,32 @@ export async function POST(
     const { error: deleteMatchupsError } = await supabaseAdmin
       .from("Matchup")
       .delete()
-      .eq("roomCode", roomCode)
-      .eq("roundNumber", room.roundNumber);
+      .eq("roomCode", roomCode);
 
     if (deleteMatchupsError) throw deleteMatchupsError;
 
-    const pairedResponses = shuffle(submittedResponses);
     const matchups = [];
+    let matchupIndex = 0;
+    const promptIds = room.usedPromptIds || [room.activePromptId];
 
-    for (let i = 0; i < pairedResponses.length; i += 2) {
-      matchups.push({
-        id: randomUUID(),
-        roomCode,
-        promptId: room.activePromptId,
-        responseAId: pairedResponses[i].id,
-        responseBId: pairedResponses[i + 1]?.id || null,
-        roundNumber: room.roundNumber,
-        matchupIndex: Math.floor(i / 2),
-        status: i === 0 ? MatchupStatus.Active : MatchupStatus.Pending,
-      });
+    for (const promptId of promptIds) {
+      const promptResponses = shuffle(
+        responsesForVoting.filter((response) => response.promptId === promptId),
+      );
+
+      for (let i = 0; i < promptResponses.length; i += 2) {
+        matchups.push({
+          id: randomUUID(),
+          roomCode,
+          promptId,
+          responseAId: promptResponses[i].id,
+          responseBId: promptResponses[i + 1]?.id || null,
+          roundNumber: room.roundNumber,
+          matchupIndex,
+          status: matchupIndex === 0 ? MatchupStatus.Active : MatchupStatus.Pending,
+        });
+        matchupIndex += 1;
+      }
     }
 
     const { error: matchupError } = await supabaseAdmin
