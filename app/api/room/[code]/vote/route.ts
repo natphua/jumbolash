@@ -22,7 +22,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { supabaseAdmin } from "@/supabase/admin";
-import { GameState, MatchupStatus, POINTS_PER_VOTE } from "@/lib/game-state";
+import { GameState, POINTS_PER_VOTE } from "@/lib/game-state";
 
 interface PlayerRecord {
   id: string;
@@ -33,70 +33,6 @@ interface ResponseRecord {
   id: string;
   playerId: string;
   votes: number;
-}
-
-interface RoomRecord {
-  roundNumber: number;
-}
-
-async function advanceMatchup(
-  roomCode: string,
-  room: RoomRecord,
-  matchupIndex: number,
-) {
-  const nextIndex = matchupIndex + 1;
-  const { data: nextMatchup, error: nextError } = await supabaseAdmin
-    .from("Matchup")
-    .select("id")
-    .eq("roomCode", roomCode)
-    .eq("roundNumber", room.roundNumber)
-    .eq("matchupIndex", nextIndex)
-    .maybeSingle();
-
-  if (nextError) throw nextError;
-
-  const { error: completeError } = await supabaseAdmin
-    .from("Matchup")
-    .update({ status: MatchupStatus.Complete })
-    .eq("roomCode", roomCode)
-    .eq("roundNumber", room.roundNumber)
-    .eq("matchupIndex", matchupIndex);
-
-  if (completeError) throw completeError;
-
-  if (!nextMatchup) {
-    const { error } = await supabaseAdmin
-      .from("Room")
-      .update({
-        gameState: GameState.Results,
-        votingStartedAt: null,
-        revealStartedAt: new Date().toISOString(),
-      })
-      .eq("roomCode", roomCode);
-
-    if (error) throw error;
-    return GameState.Results;
-  }
-
-  const [{ error: activeError }, { error: roomError }] = await Promise.all([
-    supabaseAdmin
-      .from("Matchup")
-      .update({ status: MatchupStatus.Active })
-      .eq("id", nextMatchup.id),
-    supabaseAdmin
-      .from("Room")
-      .update({
-        activeMatchupIndex: nextIndex,
-        votingStartedAt: new Date().toISOString(),
-        revealStartedAt: null,
-      })
-      .eq("roomCode", roomCode),
-  ]);
-
-  if (activeError) throw activeError;
-  if (roomError) throw roomError;
-
-  return GameState.Voting;
 }
 
 export async function POST(
@@ -277,17 +213,19 @@ export async function POST(
     const eligibleVoteCount = roomPlayers.filter(
       (player) => !responseAuthorIds.has(player.id),
     ).length;
-    let gameState: string = GameState.Voting;
-
     if ((currentVotes || []).length >= eligibleVoteCount) {
-      gameState = await advanceMatchup(
-        roomCode,
-        room,
-        matchup.matchupIndex,
-      );
+      const { error: revealError } = await supabaseAdmin
+        .from("Room")
+        .update({ revealStartedAt: room.revealStartedAt || new Date().toISOString() })
+        .eq("roomCode", roomCode);
+
+      if (revealError) throw revealError;
     }
 
-    return NextResponse.json({ ok: true, gameState }, { status: 200 });
+    return NextResponse.json(
+      { ok: true, gameState: GameState.Voting },
+      { status: 200 },
+    );
   } catch (error: unknown) {
     console.error("Error processing vote:", error);
     return NextResponse.json(

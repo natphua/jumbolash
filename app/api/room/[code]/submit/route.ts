@@ -12,7 +12,7 @@
  *
  * Responses:
  * 200 OK - Response successfully saved
- * 400 Bad Request - Missing required payload parameters or text > 120 chars
+ * 400 Bad Request - Missing required payload parameters or text > 80 chars
  * 403 Forbidden - Time limit exceeded or player already submitted this round
  * 404 Not Found - Room or player not found
  * 500 Internal Server Error - Database operational failure
@@ -63,9 +63,9 @@ export async function POST(
       );
     }
 
-    if (trimmedText.length > 120) {
+    if (trimmedText.length > 80) {
       return NextResponse.json(
-        { error: "Submission exceeds the 120-character limit." },
+        { error: "Submission exceeds the 80-character limit." },
         { status: 400 },
       );
     }

@@ -24,6 +24,7 @@ import {
   GameState,
   MatchupStatus,
   parseGameTimestamp,
+  VOTE_REVEAL_SECONDS,
   VOTING_SECONDS,
 } from "@/lib/game-state";
 
@@ -44,6 +45,7 @@ interface RoomRecord {
   activePromptId: string | null;
   activeMatchupIndex: number;
   votingStartedAt: string | null;
+  revealStartedAt: string | null;
   usedPromptIds: string[];
 }
 
@@ -52,16 +54,26 @@ function shuffle<T>(items: T[]) {
 }
 
 async function advanceVotingMatchup(roomCode: string, room: RoomRecord) {
-  if (!room.votingStartedAt) {
-    return NextResponse.json({ ok: true, gameState: GameState.Voting });
-  }
+  if (room.revealStartedAt) {
+    const revealElapsedSeconds = Math.floor(
+      (Date.now() - parseGameTimestamp(room.revealStartedAt)) / 1000,
+    );
 
-  const elapsedSeconds = Math.floor(
-    (Date.now() - parseGameTimestamp(room.votingStartedAt)) / 1000,
-  );
+    if (revealElapsedSeconds < VOTE_REVEAL_SECONDS) {
+      return NextResponse.json({ ok: true, gameState: GameState.Voting });
+    }
+  } else {
+    if (!room.votingStartedAt) {
+      return NextResponse.json({ ok: true, gameState: GameState.Voting });
+    }
 
-  if (elapsedSeconds < VOTING_SECONDS) {
-    return NextResponse.json({ ok: true, gameState: GameState.Voting });
+    const elapsedSeconds = Math.floor(
+      (Date.now() - parseGameTimestamp(room.votingStartedAt)) / 1000,
+    );
+
+    if (elapsedSeconds < VOTING_SECONDS) {
+      return NextResponse.json({ ok: true, gameState: GameState.Voting });
+    }
   }
 
   const activeIndex = room.activeMatchupIndex || 0;

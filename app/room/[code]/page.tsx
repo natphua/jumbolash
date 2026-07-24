@@ -161,6 +161,7 @@ export default function RoomPage() {
             const data = await fetchRoomData(roomCode);
             setRoomData(data);
           } catch (err) {
+            if (isLeavingRef.current) return;
             console.error("Failed to refresh room state:", err);
           }
         },
@@ -175,9 +176,13 @@ export default function RoomPage() {
           filter: `roomCode=eq.${roomCode}`,
         },
         () => {
+          if (isLeavingRef.current) return;
           alert("Host has closed this room");
           document.cookie = "player_nickname=; path=/; Max-Age=0;";
           document.cookie = "player_id=; path=/; Max-Age=0;";
+          sessionStorage.removeItem("jumbolash_player_id");
+          sessionStorage.removeItem("jumbolash_player_room_code");
+          sessionStorage.removeItem("jumbolash_player_name");
           router.replace("/");
         },
       )
@@ -208,6 +213,7 @@ export default function RoomPage() {
             const data = await fetchRoomData(roomCode);
             setRoomData(data);
           } catch (err) {
+            if (isLeavingRef.current) return;
             console.error("Failed to refresh roster state:", err);
           }
         },
@@ -219,6 +225,7 @@ export default function RoomPage() {
         const data = await fetchRoomData(roomCode);
         setRoomData(data);
       } catch (err) {
+        if (isLeavingRef.current) return;
         console.error("Failed to poll room state:", err);
       }
     }, 1500);

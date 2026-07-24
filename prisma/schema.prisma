@@ -51,7 +51,7 @@ model Prompt {
 
 model Response {
   id         String @id @default(uuid())
-  text       String @db.VarChar(120) // 120 char limit 
+  text       String @db.VarChar(80) // 80 char limit 
   votes      Int    @default(0)
   
   // Relations

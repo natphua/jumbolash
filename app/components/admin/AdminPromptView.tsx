@@ -178,7 +178,7 @@ export default function AdminPromptView({
           <span className="block font-mono text-md text-amber-400 tracking-widest uppercase mb-3">
             QUESTION {currentRound} OF {totalRounds}
           </span>
-          <h1 className="game-header text-3xl md:text-5xl text-white leading-tight">
+          <h1 className="game-header text-3xl md:text-5xl leading-tight">
             {activePrompt?.text || "Prepare your answers!"}
           </h1>
         </div>

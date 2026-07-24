@@ -12,7 +12,11 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { parseGameTimestamp, VOTING_SECONDS } from "@/lib/game-state";
+import {
+  parseGameTimestamp,
+  VOTE_REVEAL_SECONDS,
+  VOTING_SECONDS,
+} from "@/lib/game-state";
 import LoadingScreen from "../game/LoadingScreen";
 
 interface VotingResponse {
@@ -39,12 +43,14 @@ interface AdminVotingViewProps {
   roomCode: string;
   currentMatchup: CurrentMatchup | null;
   votingStartedAt: string | null;
+  revealStartedAt: string | null;
 }
 
 export default function AdminVotingView({
   roomCode,
   currentMatchup,
   votingStartedAt,
+  revealStartedAt,
 }: AdminVotingViewProps) {
   const [timeLeft, setTimeLeft] = useState(VOTING_SECONDS);
   const hasTransitionedRef = useRef(false);
@@ -84,6 +90,32 @@ export default function AdminVotingView({
       });
   }, [roomCode, timeLeft]);
 
+  useEffect(() => {
+    if (!revealStartedAt || hasTransitionedRef.current) return;
+
+    const revealStart = parseGameTimestamp(revealStartedAt);
+    const elapsedMs = Date.now() - revealStart;
+    const remainingMs = Math.max(0, VOTE_REVEAL_SECONDS * 1000 - elapsedMs);
+
+    const timeout = window.setTimeout(() => {
+      if (hasTransitionedRef.current) return;
+
+      hasTransitionedRef.current = true;
+      fetch(`/api/room/${roomCode}/transition`, { method: "POST" })
+        .then((response) => {
+          if (!response.ok) {
+            hasTransitionedRef.current = false;
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to advance voting matchup:", err);
+          hasTransitionedRef.current = false;
+        });
+    }, remainingMs);
+
+    return () => window.clearTimeout(timeout);
+  }, [revealStartedAt, roomCode]);
+
   if (!currentMatchup) {
     return <LoadingScreen />;
   }
@@ -117,7 +149,7 @@ export default function AdminVotingView({
         </span>
       </div>
 
-      <section className="w-full max-w-5xl text-center space-y-4">
+      <section className="w-full max-w-5xl text-center space-y-6">
         <p className="game-voting-banner">Vote for your favorite response</p>
         <h1 className="game-header text-3xl text-white">
           {currentMatchup.prompt?.text || "Vote on the best answer"}

@@ -11,7 +11,11 @@
 
 import { test, expect } from "@playwright/test";
 import { prisma } from "../lib/prisma";
-import { GameState, POINTS_PER_VOTE } from "../lib/game-state";
+import {
+  GameState,
+  POINTS_PER_VOTE,
+  VOTE_REVEAL_SECONDS,
+} from "../lib/game-state";
 
 test.describe("Voting Engine", () => {
   test("VE-1: transition creates one matchup per prompt and vote scoring advances the flow", async ({
@@ -123,7 +127,27 @@ test.describe("Voting Engine", () => {
       const roomAfterVote = await prisma.room.findUniqueOrThrow({
         where: { roomCode },
       });
-      expect(roomAfterVote.gameState).toBe(GameState.Results);
+      expect(roomAfterVote.gameState).toBe(GameState.Voting);
+      expect(roomAfterVote.revealStartedAt).not.toBeNull();
+
+      await prisma.room.update({
+        where: { roomCode },
+        data: {
+          revealStartedAt: new Date(
+            Date.now() - (VOTE_REVEAL_SECONDS + 1) * 1000,
+          ),
+        },
+      });
+
+      const revealTransitionResponse = await request.post(
+        `/api/room/${roomCode}/transition`,
+      );
+      expect(revealTransitionResponse.ok()).toBeTruthy();
+
+      const roomAfterReveal = await prisma.room.findUniqueOrThrow({
+        where: { roomCode },
+      });
+      expect(roomAfterReveal.gameState).toBe(GameState.Results);
     } finally {
       await prisma.room.deleteMany({ where: { roomCode } });
       await prisma.prompt.deleteMany({ where: { id: prompt.id } });

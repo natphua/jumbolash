@@ -28,6 +28,7 @@ export type MatchupStatusValue =
   (typeof MatchupStatus)[keyof typeof MatchupStatus];
 
 export const VOTING_SECONDS = 20;
+export const VOTE_REVEAL_SECONDS = 4;
 export const POINTS_PER_VOTE = 100;
 
 export function parseGameTimestamp(timestamp: string) {

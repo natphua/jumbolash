@@ -78,6 +78,7 @@ export default function AdminDashboard() {
     null,
   );
   const [votingStartedAt, setVotingStartedAt] = useState<string | null>(null);
+  const [revealStartedAt, setRevealStartedAt] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<Player[]>([]);
   const [connectedPlayerIds, setConnectedPlayerIds] = useState<Set<string>>(
     new Set(),
@@ -134,6 +135,7 @@ export default function AdminDashboard() {
         setPlayers(roomData.players || []);
         setCurrentMatchup(roomData.currentMatchup);
         setVotingStartedAt(roomData.votingStartedAt);
+        setRevealStartedAt(roomData.revealStartedAt);
         setLeaderboard(roomData.leaderboard || roomData.players || []);
       }
       setLoading(false);
@@ -168,6 +170,7 @@ export default function AdminDashboard() {
         setActivePrompt(roomData.activePrompt);
         setCurrentMatchup(roomData.currentMatchup);
         setVotingStartedAt(roomData.votingStartedAt);
+        setRevealStartedAt(roomData.revealStartedAt);
         setLeaderboard(roomData.leaderboard || roomData.players || []);
 
         if (roomData.gameState === "PROMPTING") {
@@ -215,6 +218,7 @@ export default function AdminDashboard() {
           setGameState(updated.gameState);
           setRoundStartedAt(updated.roundStartedAt);
           setVotingStartedAt(updated.votingStartedAt);
+          setRevealStartedAt(updated.revealStartedAt);
           setCurrentRound(updated.roundNumber);
           setTimer(String(updated.timerLimit));
 
@@ -231,6 +235,7 @@ export default function AdminDashboard() {
               setPlayers(roomData.players || []);
               setCurrentMatchup(roomData.currentMatchup);
               setVotingStartedAt(roomData.votingStartedAt);
+              setRevealStartedAt(roomData.revealStartedAt);
               setLeaderboard(roomData.leaderboard || roomData.players || []);
             } else {
               console.error("Failed to refresh room state:", roomData.error);
@@ -443,6 +448,7 @@ export default function AdminDashboard() {
         roomCode={roomCode}
         currentMatchup={currentMatchup}
         votingStartedAt={votingStartedAt}
+        revealStartedAt={revealStartedAt}
       />
     );
   }
