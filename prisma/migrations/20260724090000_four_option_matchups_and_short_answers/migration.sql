@@ -1,0 +1,19 @@
+ALTER TABLE "Response"
+ALTER COLUMN "text" TYPE VARCHAR(45)
+USING LEFT("text", 45);
+
+ALTER TABLE "Matchup"
+ADD COLUMN "responseCId" TEXT,
+ADD COLUMN "responseDId" TEXT;
+
+ALTER TABLE "Matchup"
+ADD CONSTRAINT "Matchup_responseCId_fkey"
+FOREIGN KEY ("responseCId") REFERENCES "Response"("id")
+ON DELETE CASCADE
+ON UPDATE CASCADE;
+
+ALTER TABLE "Matchup"
+ADD CONSTRAINT "Matchup_responseDId_fkey"
+FOREIGN KEY ("responseDId") REFERENCES "Response"("id")
+ON DELETE CASCADE
+ON UPDATE CASCADE;

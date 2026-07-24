@@ -33,8 +33,11 @@ interface CurrentMatchup {
   prompt: {
     text: string;
   } | null;
+  responses?: VotingResponse[];
   responseA: VotingResponse | null;
   responseB: VotingResponse | null;
+  responseC?: VotingResponse | null;
+  responseD?: VotingResponse | null;
   eligibleVoteCount: number;
   submittedVoteCount: number;
 }
@@ -120,16 +123,22 @@ export default function AdminVotingView({
     return <LoadingScreen />;
   }
 
-  const responses = [currentMatchup.responseA, currentMatchup.responseB].filter(
-    Boolean,
-  ) as VotingResponse[];
+  const responses = (
+    currentMatchup.responses || [
+      currentMatchup.responseA,
+      currentMatchup.responseB,
+      currentMatchup.responseC,
+      currentMatchup.responseD,
+    ]
+  ).filter(Boolean) as VotingResponse[];
   const highestVoteCount = Math.max(
     ...responses.map((response) => response.voteCount),
     0,
   );
   const isRevealReady =
-    currentMatchup.eligibleVoteCount > 0 &&
-    currentMatchup.submittedVoteCount >= currentMatchup.eligibleVoteCount;
+    Boolean(revealStartedAt) ||
+    (currentMatchup.eligibleVoteCount > 0 &&
+      currentMatchup.submittedVoteCount >= currentMatchup.eligibleVoteCount);
 
   return (
     <main className="relative min-h-screen overflow-hidden p-8 text-slate-100 flex flex-col items-center gap-8">
@@ -163,7 +172,7 @@ export default function AdminVotingView({
         </p>
       </section>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-5xl">
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 w-full max-w-5xl">
         {responses.map((response, index) => {
           const isWinner =
             isRevealReady &&
@@ -171,20 +180,23 @@ export default function AdminVotingView({
             response.voteCount === highestVoteCount;
 
           return (
-            <article
-              key={response.id}
-              className={`game-chat-bubble ${
-                index === 1 ? "game-chat-bubble-right" : "game-chat-bubble-left"
-              } ${isWinner ? "is-winning" : ""}`}
-            >
-              <p className="text-xl font-mono text-slate-900">
-                {response.text}
-              </p>
-              {isRevealReady ? (
-                <>
-                  <div className="game-author-reveal">
-                    {response.authorNickname}
-                  </div>
+            <div key={response.id} className="space-y-3">
+              {isRevealReady && (
+                <div className="game-author-reveal">
+                  {response.authorNickname}
+                </div>
+              )}
+              <article
+                className={`game-chat-bubble ${
+                  index % 2 === 1
+                    ? "game-chat-bubble-right"
+                    : "game-chat-bubble-left"
+                } ${isWinner ? "is-winning" : ""}`}
+              >
+                <p className="text-xl font-mono text-slate-900">
+                  {response.text}
+                </p>
+                {isRevealReady ? (
                   <div className="game-voter-row">
                     {response.voters.map((voter) => (
                       <span key={voter.playerId} className="game-voter-tag">
@@ -195,13 +207,13 @@ export default function AdminVotingView({
                       {response.voteCount}
                     </span>
                   </div>
-                </>
-              ) : (
-                <p className="mt-5 font-mono text-sm uppercase tracking-wider text-slate-700">
-                  Authors hidden until voting closes
-                </p>
-              )}
-            </article>
+                ) : (
+                  <p className="mt-5 font-mono text-sm uppercase tracking-wider text-slate-700">
+                    Authors hidden until voting closes
+                  </p>
+                )}
+              </article>
+            </div>
           );
         })}
       </section>

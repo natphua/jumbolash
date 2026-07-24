@@ -10,7 +10,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/supabase/client";
 import { GameState } from "@/lib/game-state";
@@ -37,6 +37,13 @@ interface CurrentMatchup {
   id: string;
   matchupIndex: number;
   prompt: { text: string } | null;
+  responses?: Array<{
+    id: string;
+    text: string;
+    authorNickname: string;
+    voteCount: number;
+    voters: Array<{ playerId: string; nickname: string }>;
+  }>;
   responseA: {
     id: string;
     text: string;
@@ -45,6 +52,20 @@ interface CurrentMatchup {
     voters: Array<{ playerId: string; nickname: string }>;
   } | null;
   responseB: {
+    id: string;
+    text: string;
+    authorNickname: string;
+    voteCount: number;
+    voters: Array<{ playerId: string; nickname: string }>;
+  } | null;
+  responseC?: {
+    id: string;
+    text: string;
+    authorNickname: string;
+    voteCount: number;
+    voters: Array<{ playerId: string; nickname: string }>;
+  } | null;
+  responseD?: {
     id: string;
     text: string;
     authorNickname: string;
@@ -86,6 +107,7 @@ export default function AdminDashboard() {
   const [presenceReady, setPresenceReady] = useState(false);
 
   const [rounds, setRounds] = useState<string>("3");
+  const roundsTouchedRef = useRef(false);
   const [currentRound, setCurrentRound] = useState<number>(1);
   const [timer, setTimer] = useState<string>("90");
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -273,6 +295,7 @@ export default function AdminDashboard() {
   }, [roomCode]);
 
   const handleRoundsChange = (val: string) => {
+    roundsTouchedRef.current = true;
     if (val === "") {
       setRounds("0");
       return;
@@ -290,20 +313,25 @@ export default function AdminDashboard() {
     setTimer(parsed === "" ? "0" : parsed);
   };
 
-  const saveSettings = async () => {
-    if (!roomCode) return;
+  useEffect(() => {
+    if (gameState !== GameState.Lobby || roundsTouchedRef.current) return;
+    setRounds(String(Math.min(Math.max(players.length, 1), 10)));
+  }, [gameState, players.length]);
+
+  const persistSettings = async (showSuccessAlert: boolean) => {
+    if (!roomCode) return false;
 
     const parsedRounds = parseInt(rounds, 10);
     const parsedTimer = parseInt(timer, 10);
 
     if (isNaN(parsedRounds) || parsedRounds < 1 || parsedRounds > 10) {
       setValidationError("Rounds must be between 1 and 10.");
-      return;
+      return false;
     }
 
     if (isNaN(parsedTimer) || parsedTimer < 30 || parsedTimer > 120) {
       setValidationError("Countdown timer must be between 30 and 120 seconds.");
-      return;
+      return false;
     }
 
     setValidationError(null);
@@ -324,9 +352,17 @@ export default function AdminDashboard() {
       setValidationError(
         "Failed to save parameter configurations: " + data.error,
       );
+      return false;
     } else {
-      alert("Match configurations updated successfully.");
+      if (showSuccessAlert) {
+        alert("Match configurations updated successfully.");
+      }
+      return true;
     }
+  };
+
+  const saveSettings = async () => {
+    await persistSettings(true);
   };
 
   const copyRoomCode = async () => {
@@ -345,6 +381,9 @@ export default function AdminDashboard() {
 
     setStartingGame(true);
     try {
+      const settingsSaved = await persistSettings(false);
+      if (!settingsSaved) return;
+
       const res = await fetch(`/api/room/${roomCode}/start`, {
         method: "POST",
       });
@@ -486,6 +525,7 @@ export default function AdminDashboard() {
           onTimerChange={handleTimerChange}
           onSaveSettings={saveSettings}
           onCopyRoomCode={copyRoomCode}
+          playerCount={players.length}
         />
 
         <AdminRosterPanel

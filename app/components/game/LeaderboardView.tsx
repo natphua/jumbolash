@@ -9,7 +9,6 @@
 
 "use client";
 
-import Image from "next/image";
 import LeaveRoomButton from "../shared/LeaveRoomButton";
 
 interface LeaderboardPlayer {
@@ -32,15 +31,10 @@ export default function LeaderboardView({
   leaveButtonText,
 }: LeaderboardViewProps) {
   return (
-    <main className="relative min-h-screen overflow-hidden p-6 flex items-center justify-center">
-      <Image
-        src="/backgrounds/yellow-bg.jpg"
-        alt=""
-        fill
-        sizes="100vw"
-        className="object-cover -z-10"
-      />
-
+    <main
+      className="relative min-h-screen overflow-hidden p-6 flex items-center justify-center bg-cover bg-center"
+      style={{ backgroundImage: "url('/backgrounds/yellow-bg.jpg')" }}
+    >
       {handleConfirm && confirmStatement && (
         <LeaveRoomButton
           text={leaveButtonText}

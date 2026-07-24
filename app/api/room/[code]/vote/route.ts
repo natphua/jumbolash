@@ -93,9 +93,12 @@ export async function POST(
       );
     }
 
-    const responseIds = [matchup.responseAId, matchup.responseBId].filter(
-      Boolean,
-    ) as string[];
+    const responseIds = [
+      matchup.responseAId,
+      matchup.responseBId,
+      matchup.responseCId,
+      matchup.responseDId,
+    ].filter(Boolean) as string[];
 
     if (!responseIds.includes(selectedResponseId)) {
       return NextResponse.json(

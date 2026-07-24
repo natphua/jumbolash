@@ -9,7 +9,7 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/supabase/client";
 import { GameState } from "@/lib/game-state";
@@ -41,6 +41,12 @@ interface RoomData {
     id: string;
     matchupIndex: number;
     prompt: { text: string } | null;
+    responses?: Array<{
+      id: string;
+      text: string;
+      playerId: string;
+      authorNickname: string;
+    }>;
     responseA: {
       id: string;
       text: string;
@@ -48,6 +54,18 @@ interface RoomData {
       authorNickname: string;
     } | null;
     responseB: {
+      id: string;
+      text: string;
+      playerId: string;
+      authorNickname: string;
+    } | null;
+    responseC?: {
+      id: string;
+      text: string;
+      playerId: string;
+      authorNickname: string;
+    } | null;
+    responseD?: {
       id: string;
       text: string;
       playerId: string;
@@ -77,6 +95,18 @@ function getPresentPlayerIds(presenceState: Record<string, unknown[]>) {
   );
 }
 
+function clearStoredPlayerSession() {
+  document.cookie = "player_nickname=; path=/; Max-Age=0;";
+  document.cookie = "player_id=; path=/; Max-Age=0;";
+  sessionStorage.removeItem("jumbolash_player_id");
+  sessionStorage.removeItem("jumbolash_player_room_code");
+  sessionStorage.removeItem("jumbolash_player_name");
+}
+
+function isRoomNotFoundError(err: unknown) {
+  return err instanceof Error && err.message === "Room not found.";
+}
+
 export default function RoomPage() {
   const params = useParams();
   const router = useRouter();
@@ -91,6 +121,12 @@ export default function RoomPage() {
   );
   const [presenceReady, setPresenceReady] = useState(false);
   const isLeavingRef = useRef(false);
+
+  const returnToHub = useCallback(() => {
+    isLeavingRef.current = true;
+    clearStoredPlayerSession();
+    router.replace("/");
+  }, [router]);
 
   // Effect 1: Handles initial data loading
   useEffect(() => {
@@ -162,6 +198,10 @@ export default function RoomPage() {
             setRoomData(data);
           } catch (err) {
             if (isLeavingRef.current) return;
+            if (isRoomNotFoundError(err)) {
+              returnToHub();
+              return;
+            }
             console.error("Failed to refresh room state:", err);
           }
         },
@@ -177,13 +217,7 @@ export default function RoomPage() {
         },
         () => {
           if (isLeavingRef.current) return;
-          alert("Host has closed this room");
-          document.cookie = "player_nickname=; path=/; Max-Age=0;";
-          document.cookie = "player_id=; path=/; Max-Age=0;";
-          sessionStorage.removeItem("jumbolash_player_id");
-          sessionStorage.removeItem("jumbolash_player_room_code");
-          sessionStorage.removeItem("jumbolash_player_name");
-          router.replace("/");
+          returnToHub();
         },
       )
       // Listener B: Watch roster changes
@@ -199,13 +233,7 @@ export default function RoomPage() {
           if (payload.eventType === "DELETE" && payload.old.id === playerId) {
             if (isLeavingRef.current) return;
 
-            alert("You have been disconnected from this room.");
-            document.cookie = "player_nickname=; path=/; Max-Age=0;";
-            document.cookie = "player_id=; path=/; Max-Age=0;";
-            sessionStorage.removeItem("jumbolash_player_id");
-            sessionStorage.removeItem("jumbolash_player_room_code");
-            sessionStorage.removeItem("jumbolash_player_name");
-            router.replace("/");
+            returnToHub();
             return;
           }
 
@@ -214,6 +242,10 @@ export default function RoomPage() {
             setRoomData(data);
           } catch (err) {
             if (isLeavingRef.current) return;
+            if (isRoomNotFoundError(err)) {
+              returnToHub();
+              return;
+            }
             console.error("Failed to refresh roster state:", err);
           }
         },
@@ -226,6 +258,10 @@ export default function RoomPage() {
         setRoomData(data);
       } catch (err) {
         if (isLeavingRef.current) return;
+        if (isRoomNotFoundError(err)) {
+          returnToHub();
+          return;
+        }
         console.error("Failed to poll room state:", err);
       }
     }, 1500);
@@ -234,7 +270,7 @@ export default function RoomPage() {
       window.clearInterval(fallbackRefresh);
       supabase.removeChannel(channel);
     };
-  }, [playerId, roomCode, router]);
+  }, [playerId, roomCode, router, returnToHub]);
 
   useEffect(() => {
     if (!roomCode || !playerId) return;

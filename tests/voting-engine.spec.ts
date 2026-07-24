@@ -289,12 +289,78 @@ test.describe("Voting Engine", () => {
       for (const matchup of matchups) {
         expect(matchup.responseAId).toBeTruthy();
         expect(matchup.responseBId).toBeTruthy();
+        expect(matchup.responseCId).toBeNull();
+        expect(matchup.responseDId).toBeNull();
       }
     } finally {
       await prisma.room.deleteMany({ where: { roomCode } });
       await prisma.prompt.deleteMany({
         where: { id: { in: prompts.map((prompt) => prompt.id) } },
       });
+    }
+  });
+
+  test("VE-4: rooms with 8 or more players create four-option voting matchups", async ({
+    request,
+  }) => {
+    const roomCode = `F${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+    const prompt = await prisma.prompt.create({
+      data: { text: "A four-option voting prompt." },
+    });
+    let players: Awaited<ReturnType<typeof prisma.player.findMany>> = [];
+
+    try {
+      await prisma.room.create({
+        data: {
+          roomCode,
+          gameState: GameState.Prompting,
+          roundNumber: 1,
+          totalRounds: 1,
+          activePromptId: prompt.id,
+          roundStartedAt: new Date(),
+          usedPromptIds: [prompt.id],
+        },
+      });
+
+      players = await Promise.all(
+        Array.from({ length: 8 }, (_, index) =>
+          prisma.player.create({
+            data: {
+              nickname: `FourOpt${index + 1}`,
+              roomCode,
+              points: 0,
+            },
+          }),
+        ),
+      );
+
+      await prisma.response.createMany({
+        data: players.map((player, index) => ({
+          text: `Short ${index + 1}`,
+          roomCode,
+          promptId: prompt.id,
+          playerId: player.id,
+        })),
+      });
+
+      const transitionResponse = await request.post(
+        `/api/room/${roomCode}/transition`,
+      );
+      expect(transitionResponse.ok()).toBeTruthy();
+
+      const matchups = await prisma.matchup.findMany({
+        where: { roomCode },
+        orderBy: { matchupIndex: "asc" },
+      });
+
+      expect(matchups).toHaveLength(1);
+      expect(matchups[0].responseAId).toBeTruthy();
+      expect(matchups[0].responseBId).toBeTruthy();
+      expect(matchups[0].responseCId).toBeTruthy();
+      expect(matchups[0].responseDId).toBeTruthy();
+    } finally {
+      await prisma.room.deleteMany({ where: { roomCode } });
+      await prisma.prompt.deleteMany({ where: { id: prompt.id } });
     }
   });
 });

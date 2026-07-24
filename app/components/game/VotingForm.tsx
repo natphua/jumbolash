@@ -26,8 +26,11 @@ interface CurrentMatchup {
   prompt: {
     text: string;
   } | null;
+  responses?: VotingResponse[];
   responseA: VotingResponse | null;
   responseB: VotingResponse | null;
+  responseC?: VotingResponse | null;
+  responseD?: VotingResponse | null;
 }
 
 interface VotingFormProps {
@@ -48,9 +51,14 @@ export default function VotingForm({
   const [submitting, setSubmitting] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
 
-  const responses = [matchup.responseA, matchup.responseB].filter(
-    Boolean,
-  ) as VotingResponse[];
+  const responses = (
+    matchup.responses || [
+      matchup.responseA,
+      matchup.responseB,
+      matchup.responseC,
+      matchup.responseD,
+    ]
+  ).filter(Boolean) as VotingResponse[];
   const ownsMatchup = responses.some(
     (response) => response.playerId === playerId,
   );
@@ -110,7 +118,7 @@ export default function VotingForm({
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
           {responses.map((response) => (
             <button
               key={response.id}

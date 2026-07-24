@@ -74,6 +74,15 @@ async function advanceVotingMatchup(roomCode: string, room: RoomRecord) {
     if (elapsedSeconds < VOTING_SECONDS) {
       return NextResponse.json({ ok: true, gameState: GameState.Voting });
     }
+
+    const { error } = await supabaseAdmin
+      .from("Room")
+      .update({ revealStartedAt: new Date().toISOString() })
+      .eq("roomCode", roomCode);
+
+    if (error) throw error;
+
+    return NextResponse.json({ ok: true, gameState: GameState.Voting });
   }
 
   const activeIndex = room.activeMatchupIndex || 0;
@@ -283,19 +292,24 @@ export async function POST(
     const matchups = [];
     let matchupIndex = 0;
     const promptIds = room.usedPromptIds || [room.activePromptId];
+    const responsesPerMatchup = totalPlayers >= 8 ? 4 : 2;
 
     for (const promptId of promptIds) {
       const promptResponses = shuffle(
         responsesForVoting.filter((response) => response.promptId === promptId),
       );
 
-      if (promptResponses.length >= 2) {
+      if (promptResponses.length >= responsesPerMatchup) {
         matchups.push({
           id: randomUUID(),
           roomCode,
           promptId,
           responseAId: promptResponses[0].id,
           responseBId: promptResponses[1].id,
+          responseCId:
+            responsesPerMatchup === 4 ? promptResponses[2].id : null,
+          responseDId:
+            responsesPerMatchup === 4 ? promptResponses[3].id : null,
           roundNumber: room.roundNumber,
           matchupIndex,
           status:

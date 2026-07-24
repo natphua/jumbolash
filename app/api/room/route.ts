@@ -267,9 +267,12 @@ export async function GET(req: Request) {
 
         if (matchupPromptError) throw matchupPromptError;
 
-        const responseIds = [matchup.responseAId, matchup.responseBId].filter(
-          Boolean,
-        ) as string[];
+        const responseIds = [
+          matchup.responseAId,
+          matchup.responseBId,
+          matchup.responseCId,
+          matchup.responseDId,
+        ].filter(Boolean) as string[];
         const [{ data: responses, error: responsesError }, { data: votes, error: votesError }] =
           await Promise.all([
             supabaseAdmin
@@ -319,8 +322,21 @@ export async function GET(req: Request) {
 
         const responseA = serializeResponse(matchup.responseAId);
         const responseB = serializeResponse(matchup.responseBId);
+        const responseC = serializeResponse(matchup.responseCId);
+        const responseD = serializeResponse(matchup.responseDId);
+        type SerializedResponse = NonNullable<
+          ReturnType<typeof serializeResponse>
+        >;
+        const matchupResponses = [
+          responseA,
+          responseB,
+          responseC,
+          responseD,
+        ].filter((response): response is SerializedResponse =>
+          Boolean(response),
+        );
         const authorIds = new Set(
-          [responseA?.playerId, responseB?.playerId].filter(Boolean),
+          matchupResponses.map((response) => response.playerId),
         );
         const eligibleVoterIds = roomPlayers
           .filter((player) => !authorIds.has(player.id))
@@ -329,8 +345,11 @@ export async function GET(req: Request) {
         currentMatchup = {
           ...matchup,
           prompt: matchupPrompt || activePrompt,
+          responses: matchupResponses,
           responseA,
           responseB,
+          responseC,
+          responseD,
           votes: matchupVotes,
           eligibleVoterIds,
           eligibleVoteCount: eligibleVoterIds.length,

@@ -51,7 +51,7 @@ model Prompt {
 
 model Response {
   id         String @id @default(uuid())
-  text       String @db.VarChar(80) // 80 char limit 
+  text       String @db.VarChar(45) // 45 char limit 
   votes      Int    @default(0)
   
   // Relations
@@ -64,6 +64,8 @@ model Response {
   prompt     Prompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
   matchupsAsA Matchup[] @relation("ResponseA")
   matchupsAsB Matchup[] @relation("ResponseB")
+  matchupsAsC Matchup[] @relation("ResponseC")
+  matchupsAsD Matchup[] @relation("ResponseD")
   voteRecords Vote[]
 
   // Double check that a single player can only submit ONE answer per prompt
@@ -76,6 +78,8 @@ model Matchup {
   promptId    String
   responseAId String
   responseBId String?
+  responseCId String?
+  responseDId String?
   roundNumber Int
   matchupIndex Int
   status      String   @default("PENDING") // PENDING, ACTIVE, REVEALED, COMPLETE
@@ -85,6 +89,8 @@ model Matchup {
   prompt     Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
   responseA  Response @relation("ResponseA", fields: [responseAId], references: [id], onDelete: Cascade)
   responseB  Response? @relation("ResponseB", fields: [responseBId], references: [id], onDelete: Cascade)
+  responseC  Response? @relation("ResponseC", fields: [responseCId], references: [id], onDelete: Cascade)
+  responseD  Response? @relation("ResponseD", fields: [responseDId], references: [id], onDelete: Cascade)
   votes      Vote[]
 
   @@unique([roomCode, roundNumber, matchupIndex])

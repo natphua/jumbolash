@@ -15,6 +15,7 @@ interface RoomSettingsPanelProps {
   roomCode: string | null;
   rounds: string;
   timer: string;
+  playerCount: number;
   validationError: string | null;
   copied: boolean;
   onRoundsChange: (val: string) => void;
@@ -27,6 +28,7 @@ export default function RoomSettingsPanel({
   roomCode,
   rounds,
   timer,
+  playerCount,
   validationError,
   copied,
   onRoundsChange,
@@ -61,8 +63,21 @@ export default function RoomSettingsPanel({
         </div>
 
         <div>
-          <label className="block text-sm font-bold font-mono tracking-wider text-slate-500 mb-1">
-            TOTAL MATCH ROUNDS (1-10)
+          <label className="flex items-center gap-2 text-sm font-bold font-mono tracking-wider text-slate-500 mb-1">
+            <span>TOTAL MATCH ROUNDS (1-10)</span>
+            <span className="group relative inline-flex">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-slate-400 bg-slate-200 text-xs font-black text-slate-600">
+                i
+              </span>
+              <span className="pointer-events-none absolute left-1/2 top-7 z-20 hidden w-72 -translate-x-1/2 border-2 border-black bg-slate-100 p-3 text-left font-mono text-xs font-bold leading-relaxed tracking-normal text-slate-700 shadow-[4px_4px_0px_rgba(0,0,0,1)] group-hover:block">
+                The total matches is the total number of questions. Although
+                everyone will be able to answer for every question, note that
+                only 2 random answers will be picked for voting, per question (4
+                random answers for 8+ players). It is recommended that you
+                choose at least {Math.max(playerCount, 1)} rounds for the
+                maximal playing experience.
+              </span>
+            </span>
           </label>
           <input
             type="number"

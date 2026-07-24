@@ -96,7 +96,7 @@ test.describe("Prompting Round Flow", () => {
 
       await playerOnePage
         .locator("textarea")
-        .fill("The recursive lab partner nobody warned you about.");
+        .fill("Recursive lab partner energy.");
       await playerOnePage.click("button:has-text('SUBMIT ANSWER')");
       await expect(
         playerOnePage.locator("text=SUBMISSION RECEIVED"),
@@ -108,7 +108,7 @@ test.describe("Prompting Round Flow", () => {
         where: {
           playerId,
           roomCode,
-          text: "The recursive lab partner nobody warned you about.",
+          text: "Recursive lab partner energy.",
         },
       });
       expect(dbResponse).not.toBeNull();

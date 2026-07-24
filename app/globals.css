@@ -227,7 +227,8 @@ form[onSubmit*="handlePlayerJoin"] .game-input:focus {
   text-transform: uppercase;
   transition:
     transform 0.18s ease-in-out,
-    border-color 0.18s ease-in-out;
+    border-color 0.18s ease-in-out,
+    background-color 0.18s ease-in-out;
 }
 
 .game-chat-bubble-left {
@@ -256,12 +257,12 @@ form[onSubmit*="handlePlayerJoin"] .game-input:focus {
 
 .game-chat-bubble.is-winning {
   border-color: #22c55e;
+  background-color: #fbbf24;
   animation: game-winner-jump 0.65s ease-in-out infinite alternate;
 }
 
 .game-author-reveal {
   display: inline-block;
-  margin-top: 1.25rem;
   padding: 0.5rem 0.75rem;
   background-color: #0170c0;
   border: 3px solid #000000;

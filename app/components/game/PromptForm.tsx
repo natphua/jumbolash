@@ -2,7 +2,7 @@
  * PromptForm.tsx
  *
  * Interactive player prompt response form. Manages synchronized countdowns,
- * 80-character bounds, client submission locking, and post-submit view states.
+ * 45-character bounds, client submission locking, and post-submit view states.
  *
  * Created on 2026-07-19 by Natalie Phua.
  */
@@ -184,7 +184,7 @@ export default function PromptForm({
           <div className="relative">
             <textarea
               value={answer}
-              onChange={(e) => setAnswer(e.target.value.slice(0, 80))}
+              onChange={(e) => setAnswer(e.target.value.slice(0, 45))}
               disabled={isLocked}
               placeholder={
                 displayedTimeLeft === 0
@@ -193,11 +193,11 @@ export default function PromptForm({
                     ? "ANSWER LOCKED IN!"
                     : "Type your witty answer here..."
               }
-              rows={3}
-              className="game-input w-full p-3 resize-none disabled:bg-slate-200 disabled:cursor-not-allowed"
+              rows={2}
+              className="game-input w-full p-3 min-h-20 resize-none disabled:bg-slate-200 disabled:cursor-not-allowed"
             />
             <div className="absolute bottom-3 right-3 font-mono text-xs text-slate-500">
-              {answer.length} / 80
+              {answer.length} / 45
             </div>
           </div>
 
