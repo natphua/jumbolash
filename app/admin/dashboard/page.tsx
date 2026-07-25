@@ -10,16 +10,22 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/supabase/client";
+import { GameState } from "@/lib/game-state";
 import RoomSettingsPanel from "../../components/admin/RoomSettingsPanel";
 import AdminRosterPanel from "../../components/admin/AdminRosterPanel";
 import AdminPromptView from "../../components/admin/AdminPromptView";
+import AdminVotingView from "../../components/admin/AdminVotingView";
+import LoadingScreen from "../../components/game/LoadingScreen";
+import LeaderboardView from "../../components/game/LeaderboardView";
+import LeaveRoomButton from "../../components/shared/LeaveRoomButton";
 
 interface Player {
   id: string;
   nickname: string;
+  points: number;
 }
 
 interface ActivePrompt {
@@ -27,22 +33,81 @@ interface ActivePrompt {
   text: string;
 }
 
-function normalizeTimerLimitSeconds(timerLimit: number) {
-  return timerLimit > 1000 ? Math.floor(timerLimit / 1000) : timerLimit;
+interface CurrentMatchup {
+  id: string;
+  matchupIndex: number;
+  prompt: { text: string } | null;
+  responses?: Array<{
+    id: string;
+    text: string;
+    authorNickname: string;
+    voteCount: number;
+    voters: Array<{ playerId: string; nickname: string }>;
+  }>;
+  responseA: {
+    id: string;
+    text: string;
+    authorNickname: string;
+    voteCount: number;
+    voters: Array<{ playerId: string; nickname: string }>;
+  } | null;
+  responseB: {
+    id: string;
+    text: string;
+    authorNickname: string;
+    voteCount: number;
+    voters: Array<{ playerId: string; nickname: string }>;
+  } | null;
+  responseC?: {
+    id: string;
+    text: string;
+    authorNickname: string;
+    voteCount: number;
+    voters: Array<{ playerId: string; nickname: string }>;
+  } | null;
+  responseD?: {
+    id: string;
+    text: string;
+    authorNickname: string;
+    voteCount: number;
+    voters: Array<{ playerId: string; nickname: string }>;
+  } | null;
+  eligibleVoteCount: number;
+  submittedVoteCount: number;
+}
+
+function getPresentPlayerIds(presenceState: Record<string, unknown[]>) {
+  return new Set(
+    Object.values(presenceState)
+      .flat()
+      .map((presence) => (presence as { playerId?: string }).playerId)
+      .filter((playerId): playerId is string => Boolean(playerId)),
+  );
 }
 
 export default function AdminDashboard() {
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
-  const isNotEnoughPlayers = players.length < 2;
+  const isNotEnoughPlayers = players.length < 3;
   const [loading, setLoading] = useState(true);
 
   // Room state for phase shifts
   const [gameState, setGameState] = useState<string>("LOBBY");
   const [activePrompt, setActivePrompt] = useState<ActivePrompt | null>(null);
   const [roundStartedAt, setRoundStartedAt] = useState<string | null>(null);
+  const [currentMatchup, setCurrentMatchup] = useState<CurrentMatchup | null>(
+    null,
+  );
+  const [votingStartedAt, setVotingStartedAt] = useState<string | null>(null);
+  const [revealStartedAt, setRevealStartedAt] = useState<string | null>(null);
+  const [leaderboard, setLeaderboard] = useState<Player[]>([]);
+  const [connectedPlayerIds, setConnectedPlayerIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [presenceReady, setPresenceReady] = useState(false);
 
   const [rounds, setRounds] = useState<string>("3");
+  const roundsTouchedRef = useRef(false);
   const [currentRound, setCurrentRound] = useState<number>(1);
   const [timer, setTimer] = useState<string>("90");
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -85,11 +150,15 @@ export default function AdminDashboard() {
         if (roomData.roundNumber) {
           setCurrentRound(roomData.roundNumber);
         }
-        setTimer(String(normalizeTimerLimitSeconds(roomData.timerLimit)));
+        setTimer(String(roomData.timerLimit));
         setGameState(roomData.gameState);
         setRoundStartedAt(roomData.roundStartedAt);
         setActivePrompt(roomData.activePrompt);
         setPlayers(roomData.players || []);
+        setCurrentMatchup(roomData.currentMatchup);
+        setVotingStartedAt(roomData.votingStartedAt);
+        setRevealStartedAt(roomData.revealStartedAt);
+        setLeaderboard(roomData.leaderboard || roomData.players || []);
       }
       setLoading(false);
     };
@@ -121,9 +190,13 @@ export default function AdminDashboard() {
         setRoundStartedAt(roomData.roundStartedAt);
         setCurrentRound(roomData.roundNumber);
         setActivePrompt(roomData.activePrompt);
+        setCurrentMatchup(roomData.currentMatchup);
+        setVotingStartedAt(roomData.votingStartedAt);
+        setRevealStartedAt(roomData.revealStartedAt);
+        setLeaderboard(roomData.leaderboard || roomData.players || []);
 
         if (roomData.gameState === "PROMPTING") {
-          setTimer(String(normalizeTimerLimitSeconds(roomData.timerLimit)));
+          setTimer(String(roomData.timerLimit));
         }
       } catch (err) {
         console.error("Failed to refresh room snapshot:", err);
@@ -166,16 +239,26 @@ export default function AdminDashboard() {
           const updated = payload.new;
           setGameState(updated.gameState);
           setRoundStartedAt(updated.roundStartedAt);
+          setVotingStartedAt(updated.votingStartedAt);
+          setRevealStartedAt(updated.revealStartedAt);
           setCurrentRound(updated.roundNumber);
-          setTimer(String(normalizeTimerLimitSeconds(updated.timerLimit)));
+          setTimer(String(updated.timerLimit));
 
-          if (updated.gameState === "PROMPTING") {
+          if (
+            updated.gameState === GameState.Prompting ||
+            updated.gameState === GameState.Voting ||
+            updated.gameState === GameState.Results
+          ) {
             const roomResponse = await fetch(`/api/room?code=${roomCode}`);
             const roomData = await roomResponse.json();
 
             if (roomResponse.ok) {
               setActivePrompt(roomData.activePrompt);
               setPlayers(roomData.players || []);
+              setCurrentMatchup(roomData.currentMatchup);
+              setVotingStartedAt(roomData.votingStartedAt);
+              setRevealStartedAt(roomData.revealStartedAt);
+              setLeaderboard(roomData.leaderboard || roomData.players || []);
             } else {
               console.error("Failed to refresh room state:", roomData.error);
             }
@@ -193,7 +276,26 @@ export default function AdminDashboard() {
     };
   }, [roomCode]);
 
+  useEffect(() => {
+    if (!roomCode) return;
+
+    const presenceChannel = supabase
+      .channel(`room-presence:${roomCode}`)
+      .on("presence", { event: "sync" }, () => {
+        setConnectedPlayerIds(
+          getPresentPlayerIds(presenceChannel.presenceState()),
+        );
+        setPresenceReady(true);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(presenceChannel);
+    };
+  }, [roomCode]);
+
   const handleRoundsChange = (val: string) => {
+    roundsTouchedRef.current = true;
     if (val === "") {
       setRounds("0");
       return;
@@ -211,20 +313,27 @@ export default function AdminDashboard() {
     setTimer(parsed === "" ? "0" : parsed);
   };
 
-  const saveSettings = async () => {
-    if (!roomCode) return;
+  useEffect(() => {
+    if (gameState !== GameState.Lobby || roundsTouchedRef.current) return;
+    const recommendedRounds =
+      players.length >= 8 ? Math.ceil(players.length / 2) : players.length;
+    setRounds(String(Math.min(Math.max(recommendedRounds, 1), 10)));
+  }, [gameState, players.length]);
+
+  const persistSettings = async (showSuccessAlert: boolean) => {
+    if (!roomCode) return false;
 
     const parsedRounds = parseInt(rounds, 10);
     const parsedTimer = parseInt(timer, 10);
 
     if (isNaN(parsedRounds) || parsedRounds < 1 || parsedRounds > 10) {
       setValidationError("Rounds must be between 1 and 10.");
-      return;
+      return false;
     }
 
     if (isNaN(parsedTimer) || parsedTimer < 30 || parsedTimer > 120) {
       setValidationError("Countdown timer must be between 30 and 120 seconds.");
-      return;
+      return false;
     }
 
     setValidationError(null);
@@ -245,9 +354,17 @@ export default function AdminDashboard() {
       setValidationError(
         "Failed to save parameter configurations: " + data.error,
       );
+      return false;
     } else {
-      alert("Match configurations updated successfully.");
+      if (showSuccessAlert) {
+        alert("Match configurations updated successfully.");
+      }
+      return true;
     }
+  };
+
+  const saveSettings = async () => {
+    await persistSettings(true);
   };
 
   const copyRoomCode = async () => {
@@ -266,6 +383,9 @@ export default function AdminDashboard() {
 
     setStartingGame(true);
     try {
+      const settingsSaved = await persistSettings(false);
+      if (!settingsSaved) return;
+
       const res = await fetch(`/api/room/${roomCode}/start`, {
         method: "POST",
       });
@@ -284,7 +404,7 @@ export default function AdminDashboard() {
       setRoundStartedAt(data.roundStartedAt || new Date().toISOString());
 
       // 3. Update game state to switch the view
-      setGameState("PROMPTING");
+      setGameState(GameState.Prompting);
     } catch (err) {
       console.error("Failed to start game:", err);
       alert("Network error starting match.");
@@ -295,11 +415,6 @@ export default function AdminDashboard() {
 
   const handleEndRoom = async () => {
     if (!roomCode) return;
-
-    const confirmEnd = confirm(
-      "Are you sure you want to end this game session? All players will be disconnected.",
-    );
-    if (!confirmEnd) return;
 
     try {
       const response = await fetch(`/api/room?code=${roomCode}`, {
@@ -316,20 +431,46 @@ export default function AdminDashboard() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900 font-mono text-slate-400">
-        <p className="animate-pulse uppercase tracking-widest">
-          SYNCING HOST DASHBOARD...
-        </p>
-      </div>
+  const handleKickPlayer = async (player: Player) => {
+    if (!roomCode) return;
+
+    const confirmKick = confirm(
+      "Are you sure you want to disconnect this player from your room?",
     );
+    if (!confirmKick) return;
+
+    try {
+      const response = await fetch(
+        `/api/room?code=${roomCode}&playerId=${player.id}`,
+        { method: "DELETE" },
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to disconnect player.");
+      }
+
+      setPlayers((prev) => prev.filter((p) => p.id !== player.id));
+      setConnectedPlayerIds((prev) => {
+        const next = new Set(prev);
+        next.delete(player.id);
+        return next;
+      });
+    } catch (err) {
+      console.error("Failed to disconnect player:", err);
+      alert("Failed to disconnect player.");
+    }
+  };
+
+  if (loading) {
+    return <LoadingScreen />;
   }
 
   // Active Prompting Phase View for Admin
-  if (gameState === "PROMPTING" && roomCode) {
+  if (gameState === GameState.Prompting && roomCode) {
     return (
       <AdminPromptView
+        key={activePrompt?.id || "prompting"}
         roomCode={roomCode}
         activePrompt={activePrompt}
         totalPlayers={players.length}
@@ -341,16 +482,38 @@ export default function AdminDashboard() {
     );
   }
 
+  if (gameState === GameState.Voting && roomCode) {
+    return (
+      <AdminVotingView
+        key={currentMatchup?.id || "voting"}
+        roomCode={roomCode}
+        currentMatchup={currentMatchup}
+        votingStartedAt={votingStartedAt}
+        revealStartedAt={revealStartedAt}
+      />
+    );
+  }
+
+  if (gameState === GameState.Results) {
+    return (
+      <LeaderboardView
+        players={leaderboard.length ? leaderboard : players}
+        leaveButtonText="END ROOM"
+        confirmStatement="Are you sure you want to end this game session? All players will be disconnected."
+        handleConfirm={handleEndRoom}
+      />
+    );
+  }
+
   // Default Host Lobby View
   return (
     <main className="min-h-screen p-8 bg-slate-900 text-slate-800 font-sans flex flex-col items-center justify-start relative">
       <div className="w-full max-w-6xl flex justify-start mb-4 mt-2">
-        <button
-          onClick={handleEndRoom}
-          className="game-box-jagged bg-rose-700 text-white px-5 py-2 text-sm cursor-pointer hover:bg-rose-800"
-        >
-          END ROOM
-        </button>
+        <LeaveRoomButton
+          text="END ROOM"
+          confirmStatement="Are you sure you want to end this game session? All players will be disconnected."
+          handleConfirm={handleEndRoom}
+        />
       </div>
 
       <div className="w-full max-w-6xl flex flex-col md:flex-row gap-8 items-start justify-center">
@@ -364,9 +527,15 @@ export default function AdminDashboard() {
           onTimerChange={handleTimerChange}
           onSaveSettings={saveSettings}
           onCopyRoomCode={copyRoomCode}
+          playerCount={players.length}
         />
 
-        <AdminRosterPanel players={players} />
+        <AdminRosterPanel
+          players={players}
+          connectedPlayerIds={connectedPlayerIds}
+          presenceReady={presenceReady}
+          onKickPlayer={handleKickPlayer}
+        />
       </div>
 
       <div className="w-full max-w-6xl mt-8 text-center">
@@ -384,7 +553,7 @@ export default function AdminDashboard() {
 
         {isNotEnoughPlayers && (
           <p className="mt-3 font-mono text-xs tracking-wider text-amber-400 uppercase">
-            2+ players must join before the game can begin.
+            At least 3 players must join before the game can begin.
           </p>
         )}
       </div>

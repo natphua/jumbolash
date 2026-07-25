@@ -10,8 +10,9 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/supabase/client";
+import { parseGameTimestamp } from "@/lib/game-state";
 
 interface ActivePrompt {
   id: string;
@@ -37,18 +38,27 @@ export default function AdminPromptView({
   currentRound,
   totalRounds,
 }: AdminPromptViewProps) {
-  const timerLimitSeconds =
-    timerLimit > 1000 ? Math.floor(timerLimit / 1000) : timerLimit;
+  const timerLimitSeconds = timerLimit;
   const [submissionCount, setSubmissionCount] = useState<number>(0);
   const [isCounterPulsing, setIsCounterPulsing] = useState<boolean>(false);
   const [timeLeft, setTimeLeft] = useState<number>(timerLimitSeconds);
+  const [showQuestionReveal, setShowQuestionReveal] = useState(true);
   const displayedTimeLeft = roundStartedAt ? timeLeft : timerLimitSeconds;
+  const hasTransitionedRef = useRef(false);
+
+  useEffect(() => {
+    const revealTimer = window.setTimeout(() => {
+      setShowQuestionReveal(false);
+    }, 4000);
+
+    return () => window.clearTimeout(revealTimer);
+  }, []);
 
   useEffect(() => {
     if (!roundStartedAt) return;
 
     const calculateRemaining = () => {
-      const start = new Date(roundStartedAt).getTime();
+      const start = parseGameTimestamp(roundStartedAt);
       const elapsedSeconds = Math.floor((Date.now() - start) / 1000);
       setTimeLeft(Math.max(0, timerLimitSeconds - elapsedSeconds));
     };
@@ -60,10 +70,34 @@ export default function AdminPromptView({
   }, [roundStartedAt, timerLimitSeconds]);
 
   useEffect(() => {
-    if (!roomCode) return;
+    const everyoneSubmitted =
+      totalPlayers > 0 && submissionCount >= totalPlayers;
+    const timerExpired = displayedTimeLeft <= 0;
+
+    if ((!timerExpired && !everyoneSubmitted) || hasTransitionedRef.current) {
+      return;
+    }
+
+    hasTransitionedRef.current = true;
+    fetch(`/api/room/${roomCode}/transition`, { method: "POST" })
+      .then((response) => {
+        if (!response.ok) {
+          hasTransitionedRef.current = false;
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to transition to voting:", err);
+        hasTransitionedRef.current = false;
+      });
+  }, [displayedTimeLeft, roomCode, submissionCount, totalPlayers]);
+
+  useEffect(() => {
+    if (!roomCode || !activePrompt?.id) return;
 
     const fetchResponseCount = async () => {
-      const response = await fetch(`/api/room/${roomCode}/responses/count`);
+      const response = await fetch(
+        `/api/room/${roomCode}/responses/count?promptId=${activePrompt.id}`,
+      );
       const data = await response.json();
 
       if (!response.ok) {
@@ -87,10 +121,12 @@ export default function AdminPromptView({
           table: "Response",
           filter: `roomCode=eq.${roomCode}`,
         },
-        () => {
-          setSubmissionCount((prev) => prev + 1);
+        (payload) => {
+          if (payload.new.promptId !== activePrompt.id) return;
+
           setIsCounterPulsing(true);
           setTimeout(() => setIsCounterPulsing(false), 600);
+          fetchResponseCount();
         },
       )
       .subscribe();
@@ -101,19 +137,39 @@ export default function AdminPromptView({
       window.clearInterval(fallbackRefresh);
       supabase.removeChannel(responseChannel);
     };
-  }, [roomCode]);
+  }, [activePrompt?.id, roomCode]);
+
+  const header = (
+    <div className="w-full max-w-5xl flex justify-between items-center border-b-2 border-slate-700 pb-4">
+      <span className="font-mono text-sm tracking-widest text-slate-400">
+        ROOM CODE: <strong className="text-amber-400">{roomCode}</strong>
+      </span>
+      <span className="game-badge bg-emerald-600 text-white font-mono uppercase">
+        PHASE: PROMPTING
+      </span>
+    </div>
+  );
+
+  if (showQuestionReveal) {
+    return (
+      <main className="min-h-screen p-8 bg-slate-900 text-slate-100 flex flex-col items-center font-sans relative">
+        {header}
+        <section className="flex flex-1 w-full max-w-5xl flex-col items-center justify-center text-center">
+          <p className="font-mono text-3xl md:text-5xl font-black uppercase tracking-widest text-amber-400 mb-14">
+            QUESTION {currentRound} OF {totalRounds}
+          </p>
+          <h1 className="game-header text-4xl md:text-6xl text-white leading-tight">
+            {activePrompt?.text || "Prepare your answers!"}
+          </h1>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen p-8 bg-slate-900 text-slate-100 flex flex-col items-center justify-between font-sans relative">
       {/* Top Header Bar */}
-      <div className="w-full max-w-5xl flex justify-between items-center border-b-2 border-slate-700 pb-4">
-        <span className="font-mono text-sm tracking-widest text-slate-400">
-          ROOM CODE: <strong className="text-amber-400">{roomCode}</strong>
-        </span>
-        <span className="game-badge bg-emerald-600 text-white font-mono uppercase">
-          PHASE: PROMPTING
-        </span>
-      </div>
+      {header}
 
       {/* Main Content Area */}
       <div className="w-full max-w-4xl flex flex-col items-center text-center my-auto space-y-8">
@@ -122,8 +178,8 @@ export default function AdminPromptView({
           <span className="block font-mono text-md text-amber-400 tracking-widest uppercase mb-3">
             QUESTION {currentRound} OF {totalRounds}
           </span>
-          <h1 className="game-header text-3xl md:text-5xl text-white leading-tight">
-            &quot;{activePrompt?.text || "Prepare your answers!"}&quot;
+          <h1 className="game-header text-3xl md:text-5xl leading-tight">
+            {activePrompt?.text || "Prepare your answers!"}
           </h1>
         </div>
 
@@ -135,7 +191,8 @@ export default function AdminPromptView({
               TIME REMAINING
             </span>
             <span
-              className={`text-5xl font-mono font-black ${
+              data-testid="admin-prompt-timer"
+              className={`text-4xl font-mono font-black ${
                 displayedTimeLeft <= 10
                   ? "text-rose-500 animate-pulse"
                   : "text-amber-400"
@@ -152,14 +209,14 @@ export default function AdminPromptView({
             </span>
             <div className="flex items-center justify-center gap-2">
               <span
-                className={`text-3xl font-mono font-black text-emerald-400 transition-transform duration-300 ${
+                className={`text-4xl font-mono font-black text-emerald-400 transition-transform duration-300 ${
                   isCounterPulsing ? "scale-125 text-amber-300" : "scale-100"
                 }`}
               >
                 {submissionCount}
               </span>
-              <span className="text-3xl font-mono text-slate-500">
-                / {totalPlayers}
+              <span className="text-4xl font-mono text-slate-500">
+                /{totalPlayers}
               </span>
             </div>
           </div>

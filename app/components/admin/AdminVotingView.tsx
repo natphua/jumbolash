@@ -1,0 +1,226 @@
+/**
+ * AdminVotingView.tsx
+ *
+ * Admin component rendering the voting phase of the game. Displays the
+ * current matchup, voting countdown, and vote tallies for each response.
+ * Automatically transitions to the next matchup when the voting timer expires.
+ *
+ * Created on 2026-07-22 by Natalie Phua.
+ */
+
+"use client";
+
+import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
+import {
+  parseGameTimestamp,
+  VOTE_REVEAL_SECONDS,
+  VOTING_SECONDS,
+} from "@/lib/game-state";
+import LoadingScreen from "../game/LoadingScreen";
+
+interface VotingResponse {
+  id: string;
+  text: string;
+  authorNickname: string;
+  voteCount: number;
+  voters: Array<{ playerId: string; nickname: string }>;
+}
+
+interface CurrentMatchup {
+  id: string;
+  matchupIndex: number;
+  prompt: {
+    text: string;
+  } | null;
+  responses?: VotingResponse[];
+  responseA: VotingResponse | null;
+  responseB: VotingResponse | null;
+  responseC?: VotingResponse | null;
+  responseD?: VotingResponse | null;
+  eligibleVoteCount: number;
+  submittedVoteCount: number;
+}
+
+interface AdminVotingViewProps {
+  roomCode: string;
+  currentMatchup: CurrentMatchup | null;
+  votingStartedAt: string | null;
+  revealStartedAt: string | null;
+}
+
+export default function AdminVotingView({
+  roomCode,
+  currentMatchup,
+  votingStartedAt,
+  revealStartedAt,
+}: AdminVotingViewProps) {
+  const [timeLeft, setTimeLeft] = useState(VOTING_SECONDS);
+  const hasRequestedRevealRef = useRef(false);
+  const hasAdvancedAfterRevealRef = useRef(false);
+
+  useEffect(() => {
+    hasRequestedRevealRef.current = false;
+    hasAdvancedAfterRevealRef.current = false;
+  }, [currentMatchup?.id]);
+
+  useEffect(() => {
+    if (!votingStartedAt) return;
+
+    const calculateRemaining = () => {
+      const start = parseGameTimestamp(votingStartedAt);
+      const elapsedSeconds = Math.floor((Date.now() - start) / 1000);
+      setTimeLeft(Math.max(0, VOTING_SECONDS - elapsedSeconds));
+    };
+
+    calculateRemaining();
+    const interval = window.setInterval(calculateRemaining, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [votingStartedAt]);
+
+  useEffect(() => {
+    if (timeLeft > 0 || revealStartedAt || hasRequestedRevealRef.current) {
+      return;
+    }
+
+    hasRequestedRevealRef.current = true;
+    fetch(`/api/room/${roomCode}/transition`, { method: "POST" })
+      .then((response) => {
+        if (!response.ok) {
+          hasRequestedRevealRef.current = false;
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to advance voting matchup:", err);
+        hasRequestedRevealRef.current = false;
+      });
+  }, [revealStartedAt, roomCode, timeLeft]);
+
+  useEffect(() => {
+    if (!revealStartedAt || hasAdvancedAfterRevealRef.current) return;
+
+    const revealStart = parseGameTimestamp(revealStartedAt);
+    const elapsedMs = Date.now() - revealStart;
+    const remainingMs = Math.max(0, VOTE_REVEAL_SECONDS * 1000 - elapsedMs);
+
+    const timeout = window.setTimeout(() => {
+      if (hasAdvancedAfterRevealRef.current) return;
+
+      hasAdvancedAfterRevealRef.current = true;
+      fetch(`/api/room/${roomCode}/transition`, { method: "POST" })
+        .then((response) => {
+          if (!response.ok) {
+            hasAdvancedAfterRevealRef.current = false;
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to advance voting matchup:", err);
+          hasAdvancedAfterRevealRef.current = false;
+        });
+    }, remainingMs);
+
+    return () => window.clearTimeout(timeout);
+  }, [revealStartedAt, roomCode]);
+
+  if (!currentMatchup) {
+    return <LoadingScreen />;
+  }
+
+  const responses = (
+    currentMatchup.responses || [
+      currentMatchup.responseA,
+      currentMatchup.responseB,
+      currentMatchup.responseC,
+      currentMatchup.responseD,
+    ]
+  ).filter(Boolean) as VotingResponse[];
+  const highestVoteCount = Math.max(
+    ...responses.map((response) => response.voteCount),
+    0,
+  );
+  const isRevealReady =
+    Boolean(revealStartedAt) ||
+    (currentMatchup.eligibleVoteCount > 0 &&
+      currentMatchup.submittedVoteCount >= currentMatchup.eligibleVoteCount);
+
+  return (
+    <main className="relative min-h-screen overflow-hidden p-8 text-slate-100 flex flex-col items-center gap-8">
+      <Image
+        src="/backgrounds/purple-bg.png"
+        alt=""
+        fill
+        sizes="100vw"
+        className="object-cover -z-10"
+      />
+      <div className="w-full max-w-5xl flex justify-between items-center border-b-2 border-slate-100 pb-4">
+        <span className="font-mono text-sm tracking-widest text-slate-400">
+          ROOM CODE: <strong className="text-amber-400">{roomCode}</strong>
+        </span>
+        <span className="game-badge bg-emerald-600 text-white font-mono uppercase">
+          PHASE: VOTING
+        </span>
+      </div>
+
+      <section className="w-full max-w-5xl text-center space-y-6">
+        <p className="game-voting-banner">Vote for your favorite response</p>
+        <h1 className="game-header text-3xl text-white">
+          {currentMatchup.prompt?.text || "Vote on the best answer"}
+        </h1>
+        <p className="font-mono text-5xl font-black text-amber-400">
+          {timeLeft}s
+        </p>
+        <p className="font-mono text-sm text-slate-400 uppercase">
+          Votes received: {currentMatchup.submittedVoteCount} /{" "}
+          {currentMatchup.eligibleVoteCount}
+        </p>
+      </section>
+
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 w-full max-w-5xl">
+        {responses.map((response, index) => {
+          const isWinner =
+            isRevealReady &&
+            highestVoteCount > 0 &&
+            response.voteCount === highestVoteCount;
+
+          return (
+            <div key={response.id} className="space-y-3">
+              {isRevealReady && (
+                <div className="game-author-reveal">
+                  {response.authorNickname}
+                </div>
+              )}
+              <article
+                className={`game-chat-bubble ${
+                  index % 2 === 1
+                    ? "game-chat-bubble-right"
+                    : "game-chat-bubble-left"
+                } ${isWinner ? "is-winning" : ""}`}
+              >
+                <p className="text-xl font-mono text-slate-900">
+                  {response.text}
+                </p>
+                {isRevealReady ? (
+                  <div className="game-voter-row">
+                    {response.voters.map((voter) => (
+                      <span key={voter.playerId} className="game-voter-tag">
+                        {voter.nickname}
+                      </span>
+                    ))}
+                    <span className="game-vote-count-badge">
+                      {response.voteCount}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="mt-5 font-mono text-sm uppercase tracking-wider text-slate-700">
+                    Authors hidden until voting closes
+                  </p>
+                )}
+              </article>
+            </div>
+          );
+        })}
+      </section>
+    </main>
+  );
+}

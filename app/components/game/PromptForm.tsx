@@ -2,14 +2,15 @@
  * PromptForm.tsx
  *
  * Interactive player prompt response form. Manages synchronized countdowns,
- * 120-character bounds, client submission locking, and post-submit view states.
+ * 45-character bounds, client submission locking, and post-submit view states.
  *
  * Created on 2026-07-19 by Natalie Phua.
  */
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { parseGameTimestamp } from "@/lib/game-state";
 
 interface PromptFormProps {
   roomCode: string;
@@ -18,6 +19,8 @@ interface PromptFormProps {
   timerLimit: number;
   roundStartedAt: string | null;
   playerId: string | null;
+  currentRound: number;
+  totalRounds: number;
 }
 
 export default function PromptForm({
@@ -27,22 +30,33 @@ export default function PromptForm({
   timerLimit,
   roundStartedAt,
   playerId,
+  currentRound,
+  totalRounds,
 }: PromptFormProps) {
-  const timerLimitSeconds =
-    timerLimit > 1000 ? Math.floor(timerLimit / 1000) : timerLimit;
+  const timerLimitSeconds = timerLimit;
   const [answer, setAnswer] = useState("");
   const [timeLeft, setTimeLeft] = useState<number>(timerLimitSeconds);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showQuestionReveal, setShowQuestionReveal] = useState(true);
   const displayedTimeLeft = roundStartedAt ? timeLeft : timerLimitSeconds;
+  const hasTransitionedRef = useRef(false);
+
+  useEffect(() => {
+    const revealTimer = window.setTimeout(() => {
+      setShowQuestionReveal(false);
+    }, 4000);
+
+    return () => window.clearTimeout(revealTimer);
+  }, []);
 
   // Synchronized countdown calculation
   useEffect(() => {
     if (!roundStartedAt) return;
 
     const calculateRemaining = () => {
-      const start = new Date(roundStartedAt).getTime();
+      const start = parseGameTimestamp(roundStartedAt);
       const elapsedSeconds = Math.floor((Date.now() - start) / 1000);
       const remaining = Math.max(0, timerLimitSeconds - elapsedSeconds);
       setTimeLeft(remaining);
@@ -53,6 +67,22 @@ export default function PromptForm({
 
     return () => clearInterval(interval);
   }, [roundStartedAt, timerLimitSeconds]);
+
+  useEffect(() => {
+    if (displayedTimeLeft > 0 || hasTransitionedRef.current) return;
+
+    hasTransitionedRef.current = true;
+    fetch(`/api/room/${roomCode}/transition`, { method: "POST" })
+      .then((response) => {
+        if (!response.ok) {
+          hasTransitionedRef.current = false;
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to transition to voting:", err);
+        hasTransitionedRef.current = false;
+      });
+  }, [displayedTimeLeft, roomCode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,21 +128,35 @@ export default function PromptForm({
 
   const isLocked = isSubmitted || displayedTimeLeft === 0 || submitting;
 
+  if (showQuestionReveal) {
+    return (
+      <div className="w-full max-w-4xl min-h-[70vh] flex flex-col items-center justify-center text-center">
+        <p className="font-mono text-2xl md:text-4xl font-black uppercase tracking-widest text-amber-400 mb-12">
+          QUESTION {currentRound} OF {totalRounds}
+        </p>
+        <h1 className="game-header text-4xl md:text-6xl text-white leading-tight">
+          {promptText || "Prepare your answer!"}
+        </h1>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-3xl space-y-6">
       {/* Header Panel with Timer */}
       <div className="game-dashboard-card flex items-center justify-between">
         <div>
-          <span className="block text-xs font-bold font-mono tracking-wider text-slate-500 mb-1">
+          <span className="block text-xs font-bold font-mono tracking-wider text-slate-500 mb-3">
             ROUND IN PROGRESS
           </span>
           <h2 className="game-header text-xl">SUBMIT YOUR ANSWER</h2>
         </div>
         <div className="text-right">
-          <span className="block text-xs font-bold font-mono tracking-wider text-slate-500 mb-1">
+          <span className="block text-xs font-bold font-mono tracking-wider text-slate-500 mb-2">
             TIME REMAINING
           </span>
           <span
+            data-testid="player-prompt-timer"
             className={`font-mono font-bold text-3xl px-3 py-1 border-2 border-black rounded ${
               displayedTimeLeft <= 10
                 ? "bg-rose-600 text-white animate-bounce"
@@ -140,7 +184,7 @@ export default function PromptForm({
           <div className="relative">
             <textarea
               value={answer}
-              onChange={(e) => setAnswer(e.target.value.slice(0, 120))}
+              onChange={(e) => setAnswer(e.target.value.slice(0, 45))}
               disabled={isLocked}
               placeholder={
                 displayedTimeLeft === 0
@@ -149,11 +193,11 @@ export default function PromptForm({
                     ? "ANSWER LOCKED IN!"
                     : "Type your witty answer here..."
               }
-              rows={3}
-              className="game-input w-full p-3 resize-none disabled:bg-slate-200 disabled:cursor-not-allowed"
+              rows={2}
+              className="game-input w-full p-3 min-h-20 resize-none disabled:bg-slate-200 disabled:cursor-not-allowed"
             />
             <div className="absolute bottom-3 right-3 font-mono text-xs text-slate-500">
-              {answer.length} / 120
+              {answer.length} / 45
             </div>
           </div>
 

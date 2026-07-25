@@ -5,16 +5,14 @@
  * Validates and stores player prompt submissions. Enforces server-side
  * timestamp verification to block tardy submissions past the countdown limit.
  *
- * Request Body:
- * {
- *   playerId: string;
- *   promptId: string;
- *   text: string;
- * }
+ * Request body:
+ *   - playerId (string): ID of player submitting response
+ *   - promptId (string): ID of the prompt being responded to
+ *   - text (string): The submitted response text
  *
  * Responses:
  * 200 OK - Response successfully saved
- * 400 Bad Request - Missing required payload parameters or text > 120 chars
+ * 400 Bad Request - Missing required payload parameters or text > 45 chars
  * 403 Forbidden - Time limit exceeded or player already submitted this round
  * 404 Not Found - Room or player not found
  * 500 Internal Server Error - Database operational failure
@@ -25,6 +23,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { supabaseAdmin } from "@/supabase/admin";
+import { GameState, parseGameTimestamp } from "@/lib/game-state";
 
 export async function POST(
   req: NextRequest,
@@ -64,9 +63,9 @@ export async function POST(
       );
     }
 
-    if (trimmedText.length > 120) {
+    if (trimmedText.length > 45) {
       return NextResponse.json(
-        { error: "Submission exceeds the 120-character limit." },
+        { error: "Submission exceeds the 45-character limit." },
         { status: 400 },
       );
     }
@@ -84,7 +83,7 @@ export async function POST(
       return NextResponse.json({ error: "Room not found." }, { status: 404 });
     }
 
-    if (room.gameState !== "PROMPTING") {
+    if (room.gameState !== GameState.Prompting) {
       return NextResponse.json(
         { error: "Room is not currently accepting answer submissions." },
         { status: 403 },
@@ -100,10 +99,8 @@ export async function POST(
     }
 
     const serverNow = Date.now();
-    const roundStart = new Date(room.roundStartedAt).getTime();
-    const timerLimitSeconds =
-      room.timerLimit > 1000 ? Math.floor(room.timerLimit / 1000) : room.timerLimit;
-    const timerLimitMs = timerLimitSeconds * 1000;
+    const roundStart = parseGameTimestamp(room.roundStartedAt);
+    const timerLimitMs = room.timerLimit * 1000;
     const allowedEndTime = roundStart + timerLimitMs;
 
     // Buffer window of 1.5 seconds to account for network latency

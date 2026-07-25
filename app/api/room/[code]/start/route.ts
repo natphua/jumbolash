@@ -20,6 +20,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/supabase/admin";
+import { GameState } from "@/lib/game-state";
 
 export async function POST(
   req: NextRequest,
@@ -56,9 +57,16 @@ export async function POST(
 
     if (playersError) throw playersError;
 
-    if ((players || []).length < 2) {
+    if ((players || []).length < 3) {
       return NextResponse.json(
-        { error: "At least 2 players are required to start the match." },
+        { error: "At least 3 players are required to start the match." },
+        { status: 400 },
+      );
+    }
+
+    if (room.timerLimit < 30 || room.timerLimit > 120) {
+      return NextResponse.json(
+        { error: "Room timer must be stored in seconds between 30 and 120." },
         { status: 400 },
       );
     }
@@ -77,15 +85,36 @@ export async function POST(
       );
     }
 
-    const randomIndex = Math.floor(Math.random() * totalPrompts);
-    const { data: prompts, error: promptError } = await supabaseAdmin
-      .from("Prompt")
-      .select("id, text")
-      .range(randomIndex, randomIndex);
+    if (room.totalRounds > totalPrompts) {
+      return NextResponse.json(
+        {
+          error:
+            "Total rounds cannot exceed the number of prompts in the database.",
+        },
+        { status: 400 },
+      );
+    }
 
-    if (promptError) throw promptError;
+    const usedPromptIds = (room.usedPromptIds || []) as string[];
+    const { data: allPrompts, error: availablePromptError } =
+      await supabaseAdmin.from("Prompt").select("id, text");
 
-    const randomPrompt = prompts?.[0];
+    if (availablePromptError) throw availablePromptError;
+
+    const usedPromptSet = new Set(usedPromptIds);
+    const availablePrompts = (allPrompts || []).filter(
+      (prompt) => !usedPromptSet.has(prompt.id),
+    );
+
+    if (!availablePrompts || availablePrompts.length === 0) {
+      return NextResponse.json(
+        { error: "No unused prompts remain for this room." },
+        { status: 400 },
+      );
+    }
+
+    const randomIndex = Math.floor(Math.random() * availablePrompts.length);
+    const randomPrompt = availablePrompts[randomIndex];
 
     if (!randomPrompt) {
       return NextResponse.json(
@@ -98,10 +127,14 @@ export async function POST(
     const { data: updatedRoom, error: updateError } = await supabaseAdmin
       .from("Room")
       .update({
-        gameState: "PROMPTING",
+        gameState: GameState.Prompting,
         activePromptId: randomPrompt.id,
         roundStartedAt: new Date().toISOString(),
         roundNumber: room.roundNumber || 1,
+        activeMatchupIndex: 0,
+        votingStartedAt: null,
+        revealStartedAt: null,
+        usedPromptIds: [...usedPromptIds, randomPrompt.id],
       })
       .eq("roomCode", roomCode)
       .select("roomCode, roundNumber, roundStartedAt")

@@ -9,10 +9,15 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/supabase/client";
+import { GameState } from "@/lib/game-state";
+import LoadingScreen from "../../components/game/LoadingScreen";
 import PromptForm from "../../components/game/PromptForm";
+import VotingForm from "../../components/game/VotingForm";
+import LeaderboardView from "../../components/game/LeaderboardView";
+import LeaveRoomButton from "../../components/shared/LeaveRoomButton";
 
 interface Player {
   id: string;
@@ -24,12 +29,50 @@ interface RoomData {
   roomCode: string;
   gameState: string;
   timerLimit: number;
+  roundNumber: number;
+  totalRounds: number;
   roundStartedAt: string | null;
   activePrompt?: {
     id: string;
     text: string;
   } | null;
   players: Player[];
+  currentMatchup?: {
+    id: string;
+    matchupIndex: number;
+    prompt: { text: string } | null;
+    responses?: Array<{
+      id: string;
+      text: string;
+      playerId: string;
+      authorNickname: string;
+    }>;
+    responseA: {
+      id: string;
+      text: string;
+      playerId: string;
+      authorNickname: string;
+    } | null;
+    responseB: {
+      id: string;
+      text: string;
+      playerId: string;
+      authorNickname: string;
+    } | null;
+    responseC?: {
+      id: string;
+      text: string;
+      playerId: string;
+      authorNickname: string;
+    } | null;
+    responseD?: {
+      id: string;
+      text: string;
+      playerId: string;
+      authorNickname: string;
+    } | null;
+  } | null;
+  leaderboard?: Player[];
 }
 
 async function fetchRoomData(roomCode: string) {
@@ -43,6 +86,27 @@ async function fetchRoomData(roomCode: string) {
   return data as RoomData;
 }
 
+function getPresentPlayerIds(presenceState: Record<string, unknown[]>) {
+  return new Set(
+    Object.values(presenceState)
+      .flat()
+      .map((presence) => (presence as { playerId?: string }).playerId)
+      .filter((id): id is string => Boolean(id)),
+  );
+}
+
+function clearStoredPlayerSession() {
+  document.cookie = "player_nickname=; path=/; Max-Age=0;";
+  document.cookie = "player_id=; path=/; Max-Age=0;";
+  sessionStorage.removeItem("jumbolash_player_id");
+  sessionStorage.removeItem("jumbolash_player_room_code");
+  sessionStorage.removeItem("jumbolash_player_name");
+}
+
+function isRoomNotFoundError(err: unknown) {
+  return err instanceof Error && err.message === "Room not found.";
+}
+
 export default function RoomPage() {
   const params = useParams();
   const router = useRouter();
@@ -52,6 +116,17 @@ export default function RoomPage() {
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [connectedPlayerIds, setConnectedPlayerIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [presenceReady, setPresenceReady] = useState(false);
+  const isLeavingRef = useRef(false);
+
+  const returnToHub = useCallback(() => {
+    isLeavingRef.current = true;
+    clearStoredPlayerSession();
+    router.replace("/");
+  }, [router]);
 
   // Effect 1: Handles initial data loading
   useEffect(() => {
@@ -122,6 +197,11 @@ export default function RoomPage() {
             const data = await fetchRoomData(roomCode);
             setRoomData(data);
           } catch (err) {
+            if (isLeavingRef.current) return;
+            if (isRoomNotFoundError(err)) {
+              returnToHub();
+              return;
+            }
             console.error("Failed to refresh room state:", err);
           }
         },
@@ -136,10 +216,8 @@ export default function RoomPage() {
           filter: `roomCode=eq.${roomCode}`,
         },
         () => {
-          alert("Host has closed this room");
-          document.cookie = "player_nickname=; path=/; Max-Age=0;";
-          document.cookie = "player_id=; path=/; Max-Age=0;";
-          router.replace("/");
+          if (isLeavingRef.current) return;
+          returnToHub();
         },
       )
       // Listener B: Watch roster changes
@@ -151,11 +229,23 @@ export default function RoomPage() {
           table: "Player",
           filter: `roomCode=eq.${roomCode}`,
         },
-        async () => {
+        async (payload) => {
+          if (payload.eventType === "DELETE" && payload.old.id === playerId) {
+            if (isLeavingRef.current) return;
+
+            returnToHub();
+            return;
+          }
+
           try {
             const data = await fetchRoomData(roomCode);
             setRoomData(data);
           } catch (err) {
+            if (isLeavingRef.current) return;
+            if (isRoomNotFoundError(err)) {
+              returnToHub();
+              return;
+            }
             console.error("Failed to refresh roster state:", err);
           }
         },
@@ -167,6 +257,11 @@ export default function RoomPage() {
         const data = await fetchRoomData(roomCode);
         setRoomData(data);
       } catch (err) {
+        if (isLeavingRef.current) return;
+        if (isRoomNotFoundError(err)) {
+          returnToHub();
+          return;
+        }
         console.error("Failed to poll room state:", err);
       }
     }, 1500);
@@ -175,16 +270,37 @@ export default function RoomPage() {
       window.clearInterval(fallbackRefresh);
       supabase.removeChannel(channel);
     };
-  }, [roomCode, router]);
+  }, [playerId, roomCode, router, returnToHub]);
+
+  useEffect(() => {
+    if (!roomCode || !playerId) return;
+
+    const presenceChannel = supabase
+      .channel(`room-presence:${roomCode}`, {
+        config: { presence: { key: playerId } },
+      })
+      .on("presence", { event: "sync" }, () => {
+        setConnectedPlayerIds(
+          getPresentPlayerIds(presenceChannel.presenceState()),
+        );
+        setPresenceReady(true);
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await presenceChannel.track({ playerId });
+        }
+      });
+
+    return () => {
+      presenceChannel.untrack();
+      supabase.removeChannel(presenceChannel);
+    };
+  }, [playerId, roomCode]);
 
   const handleLeaveRoom = async () => {
-    const confirmLeave = confirm(
-      "Are you sure you want to leave this game lobby?",
-    );
-    if (!confirmLeave) return;
-
     try {
       if (playerId) {
+        isLeavingRef.current = true;
         const response = await fetch(
           `/api/room?code=${roomCode}&playerId=${playerId}`,
           {
@@ -206,18 +322,13 @@ export default function RoomPage() {
 
       router.push("/");
     } catch (err) {
+      isLeavingRef.current = false;
       console.error("Failed to process lobby exit:", err);
     }
   };
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900 font-mono text-slate-400">
-        <p className="animate-pulse uppercase tracking-widest">
-          SYNCING WITH LOBBY...
-        </p>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (error || !roomData) {
@@ -237,18 +348,42 @@ export default function RoomPage() {
   }
 
   // Active Prompting Phase View
-  if (roomData.gameState === "PROMPTING") {
+  if (roomData.gameState === GameState.Prompting) {
     return (
       <main className="min-h-screen p-8 bg-slate-900 flex flex-col items-center justify-start font-sans relative">
         <PromptForm
+          key={roomData.activePrompt?.id || "prompting"}
           roomCode={roomData.roomCode}
           promptText={roomData.activePrompt?.text || "Prepare your answer!"}
           promptId={roomData.activePrompt?.id || ""}
           timerLimit={roomData.timerLimit || 90}
           roundStartedAt={roomData.roundStartedAt}
           playerId={playerId}
+          currentRound={roomData.roundNumber || 1}
+          totalRounds={roomData.totalRounds || 1}
         />
       </main>
+    );
+  }
+
+  if (roomData.gameState === GameState.Voting && roomData.currentMatchup) {
+    return (
+      <VotingForm
+        key={roomData.currentMatchup.id}
+        roomCode={roomData.roomCode}
+        matchup={roomData.currentMatchup}
+        playerId={playerId}
+      />
+    );
+  }
+
+  if (roomData.gameState === GameState.Results) {
+    return (
+      <LeaderboardView
+        players={roomData.leaderboard || roomData.players}
+        confirmStatement="Are you sure you want to leave this game lobby?"
+        handleConfirm={handleLeaveRoom}
+      />
     );
   }
 
@@ -256,12 +391,10 @@ export default function RoomPage() {
   return (
     <main className="min-h-screen p-8 bg-slate-900 flex flex-col items-center justify-start font-sans relative">
       <div className="w-full max-w-3xl flex justify-start mb-4 mt-2">
-        <button
-          onClick={handleLeaveRoom}
-          className="game-box-jagged bg-amber-600 text-white px-5 py-2 text-sm cursor-pointer hover:bg-amber-700"
-        >
-          LEAVE ROOM
-        </button>
+        <LeaveRoomButton
+          confirmStatement="Are you sure you want to leave this game lobby?"
+          handleConfirm={handleLeaveRoom}
+        />
       </div>
 
       <div className="w-full max-w-3xl space-y-8">
@@ -297,17 +430,30 @@ export default function RoomPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {roomData.players.map((player) => (
-                <div
-                  key={player.id}
-                  className="waiting-grid-cell flex items-center justify-between gap-2 truncate"
-                >
-                  <span className="truncate text-slate-800">
-                    {player.nickname}
-                  </span>
-                  <span className="status-badge-ready shrink-0">READY</span>
-                </div>
-              ))}
+              {roomData.players.map((player) => {
+                const isDisconnected =
+                  presenceReady && !connectedPlayerIds.has(player.id);
+
+                return (
+                  <div
+                    key={player.id}
+                    className="waiting-grid-cell flex items-center justify-between gap-2 truncate"
+                  >
+                    <span className="truncate text-slate-800">
+                      {player.nickname}
+                    </span>
+                    <span
+                      className={`shrink-0 ${
+                        isDisconnected
+                          ? "status-badge-disconnected"
+                          : "status-badge-ready"
+                      }`}
+                    >
+                      {isDisconnected ? "DISCONNECTED" : "READY"}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
