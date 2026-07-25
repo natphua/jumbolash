@@ -36,6 +36,11 @@ export default function RoomSettingsPanel({
   onSaveSettings,
   onCopyRoomCode,
 }: RoomSettingsPanelProps) {
+  const recommendedRounds = Math.max(
+    1,
+    playerCount >= 8 ? Math.ceil(playerCount / 2) : playerCount,
+  );
+
   return (
     <div className="w-full md:w-1/3 game-dashboard-card">
       <h2 className="game-header text-xl mb-4 border-b-2 border-black pb-2">
@@ -71,11 +76,11 @@ export default function RoomSettingsPanel({
               </span>
               <span className="pointer-events-none absolute left-1/2 top-7 z-20 hidden w-72 -translate-x-1/2 border-2 border-black bg-slate-100 p-3 text-left font-mono text-xs font-bold leading-relaxed tracking-normal text-slate-700 shadow-[4px_4px_0px_rgba(0,0,0,1)] group-hover:block">
                 The total matches is the total number of questions. Although
-                everyone will be able to answer for every question, note that
-                only 2 random answers will be picked for voting, per question (4
-                random answers for 8+ players). It is recommended that you
-                choose at least {Math.max(playerCount, 1)} rounds for the
-                maximal playing experience.
+                everyone will be able to answer for every question, only 2
+                random answers per question will be picked for voting (4 random
+                answers for 8+ players). It is recommended that you choose at
+                least {recommendedRounds} rounds for the maximal playing
+                experience.
               </span>
             </span>
           </label>

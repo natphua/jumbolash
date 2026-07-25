@@ -49,7 +49,7 @@ export default function AdminPromptView({
   useEffect(() => {
     const revealTimer = window.setTimeout(() => {
       setShowQuestionReveal(false);
-    }, 5000);
+    }, 4000);
 
     return () => window.clearTimeout(revealTimer);
   }, []);
@@ -192,7 +192,7 @@ export default function AdminPromptView({
             </span>
             <span
               data-testid="admin-prompt-timer"
-              className={`text-5xl font-mono font-black ${
+              className={`text-4xl font-mono font-black ${
                 displayedTimeLeft <= 10
                   ? "text-rose-500 animate-pulse"
                   : "text-amber-400"
@@ -209,14 +209,14 @@ export default function AdminPromptView({
             </span>
             <div className="flex items-center justify-center gap-2">
               <span
-                className={`text-3xl font-mono font-black text-emerald-400 transition-transform duration-300 ${
+                className={`text-4xl font-mono font-black text-emerald-400 transition-transform duration-300 ${
                   isCounterPulsing ? "scale-125 text-amber-300" : "scale-100"
                 }`}
               >
                 {submissionCount}
               </span>
-              <span className="text-3xl font-mono text-slate-500">
-                / {totalPlayers}
+              <span className="text-4xl font-mono text-slate-500">
+                /{totalPlayers}
               </span>
             </div>
           </div>

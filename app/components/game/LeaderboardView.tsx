@@ -24,6 +24,8 @@ interface LeaderboardViewProps {
   leaveButtonText?: string;
 }
 
+const podiumRowClasses = ["bg-[#F5E495]", "bg-[#BABCC2]", "bg-[#E4C4A5]"];
+
 export default function LeaderboardView({
   players,
   handleConfirm,
@@ -54,7 +56,9 @@ export default function LeaderboardView({
           {players.map((player, index) => (
             <li
               key={player.id}
-              className="flex items-center justify-between gap-4 p-4 bg-slate-50 border-2 border-black rounded shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+              className={`flex items-center justify-between gap-4 p-4 ${
+                podiumRowClasses[index] || "bg-slate-50"
+              } border-2 border-black rounded shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}
             >
               <span className="font-mono font-black text-xl text-slate-900">
                 #{index + 1} {player.nickname}

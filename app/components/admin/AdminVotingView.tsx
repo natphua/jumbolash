@@ -56,10 +56,12 @@ export default function AdminVotingView({
   revealStartedAt,
 }: AdminVotingViewProps) {
   const [timeLeft, setTimeLeft] = useState(VOTING_SECONDS);
-  const hasTransitionedRef = useRef(false);
+  const hasRequestedRevealRef = useRef(false);
+  const hasAdvancedAfterRevealRef = useRef(false);
 
   useEffect(() => {
-    hasTransitionedRef.current = false;
+    hasRequestedRevealRef.current = false;
+    hasAdvancedAfterRevealRef.current = false;
   }, [currentMatchup?.id]);
 
   useEffect(() => {
@@ -78,41 +80,43 @@ export default function AdminVotingView({
   }, [votingStartedAt]);
 
   useEffect(() => {
-    if (timeLeft > 0 || hasTransitionedRef.current) return;
+    if (timeLeft > 0 || revealStartedAt || hasRequestedRevealRef.current) {
+      return;
+    }
 
-    hasTransitionedRef.current = true;
+    hasRequestedRevealRef.current = true;
     fetch(`/api/room/${roomCode}/transition`, { method: "POST" })
       .then((response) => {
         if (!response.ok) {
-          hasTransitionedRef.current = false;
+          hasRequestedRevealRef.current = false;
         }
       })
       .catch((err) => {
         console.error("Failed to advance voting matchup:", err);
-        hasTransitionedRef.current = false;
+        hasRequestedRevealRef.current = false;
       });
-  }, [roomCode, timeLeft]);
+  }, [revealStartedAt, roomCode, timeLeft]);
 
   useEffect(() => {
-    if (!revealStartedAt || hasTransitionedRef.current) return;
+    if (!revealStartedAt || hasAdvancedAfterRevealRef.current) return;
 
     const revealStart = parseGameTimestamp(revealStartedAt);
     const elapsedMs = Date.now() - revealStart;
     const remainingMs = Math.max(0, VOTE_REVEAL_SECONDS * 1000 - elapsedMs);
 
     const timeout = window.setTimeout(() => {
-      if (hasTransitionedRef.current) return;
+      if (hasAdvancedAfterRevealRef.current) return;
 
-      hasTransitionedRef.current = true;
+      hasAdvancedAfterRevealRef.current = true;
       fetch(`/api/room/${roomCode}/transition`, { method: "POST" })
         .then((response) => {
           if (!response.ok) {
-            hasTransitionedRef.current = false;
+            hasAdvancedAfterRevealRef.current = false;
           }
         })
         .catch((err) => {
           console.error("Failed to advance voting matchup:", err);
-          hasTransitionedRef.current = false;
+          hasAdvancedAfterRevealRef.current = false;
         });
     }, remainingMs);
 

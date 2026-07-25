@@ -363,4 +363,77 @@ test.describe("Voting Engine", () => {
       await prisma.prompt.deleteMany({ where: { id: prompt.id } });
     }
   });
+
+  test("VE-5: final transition autofills missing answers after the prompt timer", async ({
+    request,
+  }) => {
+    const roomCode = `E${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+    const prompt = await prisma.prompt.create({
+      data: { text: "A sparse response prompt." },
+    });
+    let players: Awaited<ReturnType<typeof prisma.player.findMany>> = [];
+
+    try {
+      await prisma.room.create({
+        data: {
+          roomCode,
+          gameState: GameState.Prompting,
+          roundNumber: 1,
+          totalRounds: 1,
+          timerLimit: 1,
+          activePromptId: prompt.id,
+          roundStartedAt: new Date(Date.now() - 2000),
+          usedPromptIds: [prompt.id],
+        },
+      });
+
+      players = await Promise.all(
+        ["EmptyAlpha", "EmptyBravo", "EmptyCharlie"].map((nickname) =>
+          prisma.player.create({
+            data: { nickname, roomCode, points: 0 },
+          }),
+        ),
+      );
+
+      await prisma.response.create({
+        data: {
+          text: "Only real answer",
+          roomCode,
+          promptId: prompt.id,
+          playerId: players[0].id,
+        },
+      });
+
+      const transitionResponse = await request.post(
+        `/api/room/${roomCode}/transition`,
+      );
+      expect(transitionResponse.ok()).toBeTruthy();
+
+      const roomAfterTransition = await prisma.room.findUniqueOrThrow({
+        where: { roomCode },
+      });
+      expect(roomAfterTransition.gameState).toBe(GameState.Voting);
+
+      const responses = await prisma.response.findMany({
+        where: { roomCode, promptId: prompt.id },
+      });
+      expect(responses).toHaveLength(players.length);
+      expect(
+        responses.filter((response) => response.text === "EMPTY RESPONSE"),
+      ).toHaveLength(2);
+
+      const matchups = await prisma.matchup.findMany({
+        where: { roomCode },
+        include: { responseA: true, responseB: true },
+      });
+      expect(matchups).toHaveLength(1);
+      expect([
+        matchups[0].responseA.text,
+        matchups[0].responseB?.text,
+      ]).toContain("Only real answer");
+    } finally {
+      await prisma.room.deleteMany({ where: { roomCode } });
+      await prisma.prompt.deleteMany({ where: { id: prompt.id } });
+    }
+  });
 });

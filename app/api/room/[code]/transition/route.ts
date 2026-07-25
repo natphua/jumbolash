@@ -33,6 +33,7 @@ interface ResponseRecord {
   roomCode: string;
   playerId: string;
   promptId: string;
+  text?: string;
 }
 
 interface RoomRecord {
@@ -51,6 +52,64 @@ interface RoomRecord {
 
 function shuffle<T>(items: T[]) {
   return [...items].sort(() => Math.random() - 0.5);
+}
+
+function selectResponsesForMatchup(
+  responses: ResponseRecord[],
+  responsesPerMatchup: number,
+) {
+  const shuffledResponses = shuffle(responses);
+  const filledResponses = shuffledResponses.filter(
+    (response) => response.text !== "EMPTY RESPONSE",
+  );
+  const emptyResponses = shuffledResponses.filter(
+    (response) => response.text === "EMPTY RESPONSE",
+  );
+
+  return [...filledResponses, ...emptyResponses].slice(0, responsesPerMatchup);
+}
+
+async function autofillMissingResponses(
+  roomCode: string,
+  promptIds: string[],
+  players: Array<{ id: string }>,
+  existingResponses: ResponseRecord[],
+) {
+  const submittedByPrompt = new Map<string, Set<string>>();
+
+  for (const response of existingResponses) {
+    const submittedPlayers =
+      submittedByPrompt.get(response.promptId) || new Set<string>();
+    submittedPlayers.add(response.playerId);
+    submittedByPrompt.set(response.promptId, submittedPlayers);
+  }
+
+  const fallbackResponses = promptIds.flatMap((promptId) => {
+    const submittedPlayers =
+      submittedByPrompt.get(promptId) || new Set<string>();
+
+    return players
+      .filter((player) => !submittedPlayers.has(player.id))
+      .map((player) => ({
+        id: randomUUID(),
+        text: "EMPTY RESPONSE",
+        roomCode,
+        promptId,
+        playerId: player.id,
+      }));
+  });
+
+  if (fallbackResponses.length === 0) return;
+
+  const { error } = await supabaseAdmin.from("Response").upsert(
+    fallbackResponses,
+    {
+      onConflict: "playerId,promptId",
+      ignoreDuplicates: true,
+    },
+  );
+
+  if (error) throw error;
 }
 
 async function advanceVotingMatchup(roomCode: string, room: RoomRecord) {
@@ -274,13 +333,32 @@ export async function POST(
     const { data: allRoundResponses, error: allResponsesError } =
       await supabaseAdmin
         .from("Response")
-        .select("id, roomCode, playerId, promptId")
+        .select("id, roomCode, playerId, promptId, text")
         .eq("roomCode", roomCode)
         .in("promptId", room.usedPromptIds || [room.activePromptId]);
 
     if (allResponsesError) throw allResponsesError;
 
-    const responsesForVoting = (allRoundResponses || []) as ResponseRecord[];
+    const promptIds = room.usedPromptIds || [room.activePromptId];
+    const existingResponses = (allRoundResponses || []) as ResponseRecord[];
+
+    await autofillMissingResponses(
+      roomCode,
+      promptIds,
+      players || [],
+      existingResponses,
+    );
+
+    const { data: votingResponses, error: votingResponsesError } =
+      await supabaseAdmin
+        .from("Response")
+        .select("id, roomCode, playerId, promptId, text")
+        .eq("roomCode", roomCode)
+        .in("promptId", promptIds);
+
+    if (votingResponsesError) throw votingResponsesError;
+
+    const responsesForVoting = (votingResponses || []) as ResponseRecord[];
 
     const { error: deleteMatchupsError } = await supabaseAdmin
       .from("Matchup")
@@ -291,12 +369,12 @@ export async function POST(
 
     const matchups = [];
     let matchupIndex = 0;
-    const promptIds = room.usedPromptIds || [room.activePromptId];
     const responsesPerMatchup = totalPlayers >= 8 ? 4 : 2;
 
     for (const promptId of promptIds) {
-      const promptResponses = shuffle(
+      const promptResponses = selectResponsesForMatchup(
         responsesForVoting.filter((response) => response.promptId === promptId),
+        responsesPerMatchup,
       );
 
       if (promptResponses.length >= responsesPerMatchup) {

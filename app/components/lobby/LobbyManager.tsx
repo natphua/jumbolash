@@ -16,12 +16,7 @@ import { useRouter } from "next/navigation";
 export default function LobbyManager() {
   const [view, setView] = useState<"home" | "join">("home");
   const [roomCode, setRoomCode] = useState("");
-  const [nickname, setNickname] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("jumbolash_player_name") || "";
-    }
-    return "";
-  });
+  const [nickname, setNickname] = useState("");
 
   const router = useRouter();
 

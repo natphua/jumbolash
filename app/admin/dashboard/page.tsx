@@ -315,7 +315,9 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (gameState !== GameState.Lobby || roundsTouchedRef.current) return;
-    setRounds(String(Math.min(Math.max(players.length, 1), 10)));
+    const recommendedRounds =
+      players.length >= 8 ? Math.ceil(players.length / 2) : players.length;
+    setRounds(String(Math.min(Math.max(recommendedRounds, 1), 10)));
   }, [gameState, players.length]);
 
   const persistSettings = async (showSuccessAlert: boolean) => {

@@ -46,7 +46,7 @@ export default function PromptForm({
   useEffect(() => {
     const revealTimer = window.setTimeout(() => {
       setShowQuestionReveal(false);
-    }, 5000);
+    }, 4000);
 
     return () => window.clearTimeout(revealTimer);
   }, []);
@@ -146,13 +146,13 @@ export default function PromptForm({
       {/* Header Panel with Timer */}
       <div className="game-dashboard-card flex items-center justify-between">
         <div>
-          <span className="block text-xs font-bold font-mono tracking-wider text-slate-500 mb-1">
+          <span className="block text-xs font-bold font-mono tracking-wider text-slate-500 mb-3">
             ROUND IN PROGRESS
           </span>
           <h2 className="game-header text-xl">SUBMIT YOUR ANSWER</h2>
         </div>
         <div className="text-right">
-          <span className="block text-xs font-bold font-mono tracking-wider text-slate-500 mb-1">
+          <span className="block text-xs font-bold font-mono tracking-wider text-slate-500 mb-2">
             TIME REMAINING
           </span>
           <span
