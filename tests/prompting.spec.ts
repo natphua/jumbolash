@@ -71,10 +71,7 @@ test.describe("Prompting Round Flow", () => {
       await joinRoom(playerTwoPage, roomCode, "PromptPlayerTwo");
       await joinRoom(playerThreePage, roomCode, "PromptPlayer3");
 
-      const playerCookies = await playerOneContext.cookies();
-      playerId =
-        playerCookies.find((cookie) => cookie.name === "player_id")?.value ||
-        "";
+      playerId = await getSessionPlayerId(playerOnePage);
       expect(playerId).toBeTruthy();
 
       await expect(adminPage.locator("text=PromptPlayerOne")).toBeVisible({
@@ -376,6 +373,14 @@ async function readTimerSeconds(locator: Locator) {
   const seconds = Number(text.match(/\d+/)?.[0] || Number.NaN);
   expect(Number.isFinite(seconds)).toBeTruthy();
   return seconds;
+}
+
+async function getSessionPlayerId(page: Page) {
+  return (
+    (await page.evaluate(() =>
+      sessionStorage.getItem("jumbolash_player_id"),
+    )) || ""
+  );
 }
 
 async function submitPromptAnswer(page: Page, answer: string) {

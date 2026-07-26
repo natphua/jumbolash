@@ -33,6 +33,18 @@ interface ActivePrompt {
   text: string;
 }
 
+function preservePromptingPrompt(
+  current: ActivePrompt | null,
+  next: ActivePrompt | null,
+  nextGameState: string,
+) {
+  if (next?.id || nextGameState !== GameState.Prompting) {
+    return next;
+  }
+
+  return current;
+}
+
 interface CurrentMatchup {
   id: string;
   matchupIndex: number;
@@ -153,7 +165,13 @@ export default function AdminDashboard() {
         setTimer(String(roomData.timerLimit));
         setGameState(roomData.gameState);
         setRoundStartedAt(roomData.roundStartedAt);
-        setActivePrompt(roomData.activePrompt);
+        setActivePrompt((current) =>
+          preservePromptingPrompt(
+            current,
+            roomData.activePrompt,
+            roomData.gameState,
+          ),
+        );
         setPlayers(roomData.players || []);
         setCurrentMatchup(roomData.currentMatchup);
         setVotingStartedAt(roomData.votingStartedAt);
@@ -189,7 +207,13 @@ export default function AdminDashboard() {
         setGameState(roomData.gameState);
         setRoundStartedAt(roomData.roundStartedAt);
         setCurrentRound(roomData.roundNumber);
-        setActivePrompt(roomData.activePrompt);
+        setActivePrompt((current) =>
+          preservePromptingPrompt(
+            current,
+            roomData.activePrompt,
+            roomData.gameState,
+          ),
+        );
         setCurrentMatchup(roomData.currentMatchup);
         setVotingStartedAt(roomData.votingStartedAt);
         setRevealStartedAt(roomData.revealStartedAt);
@@ -253,7 +277,13 @@ export default function AdminDashboard() {
             const roomData = await roomResponse.json();
 
             if (roomResponse.ok) {
-              setActivePrompt(roomData.activePrompt);
+              setActivePrompt((current) =>
+                preservePromptingPrompt(
+                  current,
+                  roomData.activePrompt,
+                  roomData.gameState,
+                ),
+              );
               setPlayers(roomData.players || []);
               setCurrentMatchup(roomData.currentMatchup);
               setVotingStartedAt(roomData.votingStartedAt);
@@ -394,11 +424,15 @@ export default function AdminDashboard() {
 
       if (!res.ok) {
         alert(data.error || "Failed to start match.");
+        return;
       }
 
-      if (data.activePrompt) {
-        setActivePrompt(data.activePrompt);
+      if (!data.activePrompt?.id) {
+        alert("Failed to load a prompt for this round.");
+        return;
       }
+
+      setActivePrompt(data.activePrompt);
 
       // 2. Fallback for start time if not returned explicitly by API
       setRoundStartedAt(data.roundStartedAt || new Date().toISOString());
@@ -468,9 +502,13 @@ export default function AdminDashboard() {
 
   // Active Prompting Phase View for Admin
   if (gameState === GameState.Prompting && roomCode) {
+    if (!activePrompt?.id) {
+      return <LoadingScreen />;
+    }
+
     return (
       <AdminPromptView
-        key={activePrompt?.id || "prompting"}
+        key={activePrompt.id}
         roomCode={roomCode}
         activePrompt={activePrompt}
         totalPlayers={players.length}

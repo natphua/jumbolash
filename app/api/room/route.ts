@@ -225,7 +225,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Room not found." }, { status: 404 });
     }
 
-    const [{ data: players, error: playersError }, { data: activePrompt, error: promptError }] =
+    const [{ data: players, error: playersError }, { data: prompt, error: promptError }] =
       await Promise.all([
         supabaseAdmin
           .from("Player")
@@ -242,6 +242,42 @@ export async function GET(req: Request) {
 
     if (playersError) throw playersError;
     if (promptError) throw promptError;
+
+    let activePrompt = prompt;
+
+    if (room.gameState === GameState.Prompting && room.activePromptId && !activePrompt) {
+      const usedPromptIds = (room.usedPromptIds || []) as string[];
+      const usedPromptSet = new Set(usedPromptIds);
+      const { data: replacementPrompts, error: replacementError } =
+        await supabaseAdmin.from("Prompt").select("id, text");
+
+      if (replacementError) throw replacementError;
+
+      const replacementPrompt = (replacementPrompts || []).find(
+        (candidate) => !usedPromptSet.has(candidate.id),
+      );
+
+      if (replacementPrompt) {
+        const repairedUsedPromptIds = [
+          ...usedPromptIds.filter((promptId: string) => promptId !== room.activePromptId),
+          replacementPrompt.id,
+        ];
+
+        const { error: repairError } = await supabaseAdmin
+          .from("Room")
+          .update({
+            activePromptId: replacementPrompt.id,
+            usedPromptIds: repairedUsedPromptIds,
+          })
+          .eq("roomCode", roomCode);
+
+        if (repairError) throw repairError;
+
+        room.activePromptId = replacementPrompt.id;
+        room.usedPromptIds = repairedUsedPromptIds;
+        activePrompt = replacementPrompt;
+      }
+    }
 
     const roomPlayers = (players || []) as Player[];
     let currentMatchup = null;

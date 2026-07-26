@@ -32,6 +32,7 @@ interface RoomData {
   roundNumber: number;
   totalRounds: number;
   roundStartedAt: string | null;
+  activePromptId?: string | null;
   activePrompt?: {
     id: string;
     text: string;
@@ -349,13 +350,19 @@ export default function RoomPage() {
 
   // Active Prompting Phase View
   if (roomData.gameState === GameState.Prompting) {
+    const promptId = roomData.activePrompt?.id || roomData.activePromptId;
+
+    if (!promptId || !playerId) {
+      return <LoadingScreen />;
+    }
+
     return (
       <main className="min-h-screen p-8 bg-slate-900 flex flex-col items-center justify-start font-sans relative">
         <PromptForm
-          key={roomData.activePrompt?.id || "prompting"}
+          key={promptId}
           roomCode={roomData.roomCode}
           promptText={roomData.activePrompt?.text || "Prepare your answer!"}
-          promptId={roomData.activePrompt?.id || ""}
+          promptId={promptId}
           timerLimit={roomData.timerLimit || 90}
           roundStartedAt={roomData.roundStartedAt}
           playerId={playerId}
