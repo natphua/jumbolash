@@ -1,4 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# JumboLash
+
+JumboLash is a fast-paced party game inspired by Jackbox’s Quiplash, with prompts tailored for Tufts students.
+
+This project was built for JumboCode’s weekly hacknights.
+
+## Gameplay Overview
+
+JumboLash has four phases:
+
+### 1. Lobby
+
+Players join a room while the admin configures the game settings, including the prompts and answer timer.
+
+A room must have at least 3 players or teams before the game can begin.
+
+### 2. Prompting
+
+All players answer the same prompts.
+
+If a player does not submit an answer before time runs out, their response is recorded as blank and may still appear during voting.
+
+### 3. Voting
+
+Players vote on their favorite response for each prompt.
+
+For rooms with fewer than 8 players, responses are shown in pairs. For rooms with 8+ players, 4 random responses are shown per prompt.
+
+Players cannot vote on matchups that include their own response. Each vote is worth 100 points.
+
+To give players roughly equal scoring opportunities, admins are encouraged to use:
+
+- `# of players` prompts for rooms with fewer than 8 players
+- `# of players / 2` prompts for rooms with 8 or more players
+
+The matchup algorithm tries to keep response appearances balanced, with a max variance of 1 when possible. Blank responses are given the lowest priority.
+
+### 4. Results
+
+After voting ends, players see the final scoreboard. The top 3 players are highlighted.
+
+## Tech Stack
+
+Frontend: Next.js, Tailwind CSS, Typescript
+
+Backend: Next.js serverless API routes, with Supabase database managed via Prisma ORM
 
 ## Getting Started
 
@@ -14,23 +59,5 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Then open [http://localhost:3000](http://localhost:3000) with your browser to
+see the result.
